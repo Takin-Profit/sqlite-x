@@ -1,0 +1,24 @@
+{
+  "name": "sqlitex",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "try": "tsx src/index.ts",
+    "test": "tsx --test \"src/{,**/}*.test.ts\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.2",
+    "type-fest": "^4.32.0"
+  },
+  "dependencies": {
+    "kysely": "^0.27.5",
+    "sql-template-tag": "^5.2.1",
+    "squid": "^0.5.2"
+  }
+}

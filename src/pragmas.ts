@@ -27,10 +27,13 @@ export type PragmaConfig = Partial<{
 	journalMode: JournalMode
 	synchronous: SynchronousMode
 	cacheSize: number
+	mmapSize: number
 	tempStore: TempStore
 	lockingMode: LockingMode
 	busyTimeout: number
 	foreignKeys: boolean
+	walAutocheckpoint: number
+	trustedSchema: boolean
 }>
 
 export function validatePragmaConfig(config: unknown): ValidationError[] {
@@ -40,7 +43,7 @@ export function validatePragmaConfig(config: unknown): ValidationError[] {
 		return [validationErr({ msg: "PragmaConfig must be an object" })]
 	}
 
-	const pragmaConfig = config as object
+	const pragmaConfig = config as Record<string, unknown>
 
 	if (
 		"journalMode" in pragmaConfig &&
@@ -102,6 +105,15 @@ export function validatePragmaConfig(config: unknown): ValidationError[] {
 		)
 	}
 
+	if ("mmapSize" in pragmaConfig && typeof pragmaConfig.mmapSize !== "number") {
+		errors.push(
+			validationErr({
+				msg: "mmapSize must be a number",
+				path: "mmapSize",
+			})
+		)
+	}
+
 	if (
 		"busyTimeout" in pragmaConfig &&
 		typeof pragmaConfig.busyTimeout !== "number"
@@ -126,6 +138,30 @@ export function validatePragmaConfig(config: unknown): ValidationError[] {
 		)
 	}
 
+	if (
+		"walAutocheckpoint" in pragmaConfig &&
+		typeof pragmaConfig.walAutocheckpoint !== "number"
+	) {
+		errors.push(
+			validationErr({
+				msg: "walAutocheckpoint must be a number",
+				path: "walAutocheckpoint",
+			})
+		)
+	}
+
+	if (
+		"trustedSchema" in pragmaConfig &&
+		typeof pragmaConfig.trustedSchema !== "boolean"
+	) {
+		errors.push(
+			validationErr({
+				msg: "trustedSchema must be a boolean",
+				path: "trustedSchema",
+			})
+		)
+	}
+
 	return errors
 }
 
@@ -136,32 +172,51 @@ export const PragmaDefaults: Record<
 	"development" | "testing" | "production",
 	PragmaConfig
 > = {
+	/**
+	 * Development environment defaults - optimized for development workflow
+	 */
 	development: {
 		journalMode: "WAL",
 		synchronous: "NORMAL",
-		cacheSize: -64000,
+		cacheSize: -64000, // 64MB cache
 		tempStore: "MEMORY",
+		mmapSize: 64000000, // 64MB mmap
 		lockingMode: "NORMAL",
 		busyTimeout: 5000,
 		foreignKeys: true,
+		walAutocheckpoint: 1000,
+		trustedSchema: true,
 	},
+
+	/**
+	 * Testing environment defaults - optimized for in-memory testing
+	 */
 	testing: {
 		journalMode: "WAL",
-		synchronous: "OFF",
-		cacheSize: -32000,
+		synchronous: "OFF", // Less durable but faster for testing
+		cacheSize: -32000, // 32MB cache is enough for testing
 		tempStore: "MEMORY",
-		lockingMode: "EXCLUSIVE",
+		lockingMode: "EXCLUSIVE", // Reduce lock conflicts
 		busyTimeout: 5000,
 		foreignKeys: true,
+		walAutocheckpoint: 1000,
+		trustedSchema: true,
 	},
+
+	/**
+	 * Production environment defaults - optimized for durability and performance
+	 */
 	production: {
 		journalMode: "WAL",
 		synchronous: "NORMAL",
-		cacheSize: -64000,
+		cacheSize: -64000, // 64MB cache
 		tempStore: "MEMORY",
+		mmapSize: 268435456, // 256MB mmap
 		lockingMode: "NORMAL",
 		busyTimeout: 10000,
 		foreignKeys: true,
+		walAutocheckpoint: 1000,
+		trustedSchema: false, // Safer default for production
 	},
 }
 
@@ -183,6 +238,10 @@ export function getPragmaStatements(config: PragmaConfig): string[] {
 		statements.push(`PRAGMA cache_size=${config.cacheSize};`)
 	}
 
+	if (config.mmapSize !== undefined) {
+		statements.push(`PRAGMA mmap_size=${config.mmapSize};`)
+	}
+
 	if (config.tempStore) {
 		statements.push(`PRAGMA temp_store=${config.tempStore};`)
 	}
@@ -197,6 +256,16 @@ export function getPragmaStatements(config: PragmaConfig): string[] {
 
 	if (config.foreignKeys !== undefined) {
 		statements.push(`PRAGMA foreign_keys=${config.foreignKeys ? "ON" : "OFF"};`)
+	}
+
+	if (config.walAutocheckpoint !== undefined) {
+		statements.push(`PRAGMA wal_autocheckpoint=${config.walAutocheckpoint};`)
+	}
+
+	if (config.trustedSchema !== undefined) {
+		statements.push(
+			`PRAGMA trusted_schema=${config.trustedSchema ? "ON" : "OFF"};`
+		)
 	}
 
 	return statements

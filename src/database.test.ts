@@ -19,6 +19,7 @@ beforeEach(() => {
 
 		db = new DB({
 			location: dbPath,
+			environment: "testing",
 			logger: new ConsoleLogger(LogLevel.ERROR),
 		})
 

@@ -30,7 +30,6 @@
     "noUnusedParameters": false, // Often too strict, especially with callbacks
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
-    "noPropertyAccessFromIndexSignature": true,
     // JavaScript Support
     "allowJs": true,
     "checkJs": true,

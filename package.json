@@ -4,8 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "try": "tsx src/index.ts",
-    "test": "tsx --test \"src/{,**/}*.test.ts\""
+    "try": "tsx try",
+    "test": "tsx --test --experimental-sqlite src/**/*.test.ts"
   },
   "keywords": [],
   "author": "",

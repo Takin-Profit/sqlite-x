@@ -62,16 +62,26 @@ class Sql<P extends UnknownRecord> {
 			}
 			return value as SupportedValueType
 		})
+
 		return { sql: this.sql, values }
 	}
 }
 
 type SqlFn<P extends UnknownRecord> = (
 	strings: TemplateStringsArray,
-	...params: Array<keyof P | SqlParam>
+	...params: Array<keyof P>
 ) => Sql<P>
 
 type QueryFunction<P extends UnknownRecord> = <R>(params: PartialDeep<P>) => R
+
+export interface MutationResult {
+	changes: number | bigint
+	lastInsertRowid: number | bigint
+}
+
+export type MutationFunction<P extends UnknownRecord> = (
+	params: PartialDeep<P>
+) => MutationResult
 
 export interface DBOptions {
 	location?: string
@@ -104,7 +114,10 @@ export class DB {
 
 			const defaultPragmas = PragmaDefaults[environment]
 			const customPragmas = options.pragma || {}
-			const finalPragmas: PragmaConfig = { ...defaultPragmas, ...customPragmas }
+			const finalPragmas: PragmaConfig = {
+				...defaultPragmas,
+				...customPragmas,
+			}
 			this.#configurePragmas(finalPragmas)
 
 			// Initialize statement cache if enabled
@@ -179,26 +192,19 @@ export class DB {
 		builder: (ctx: { sql: SqlFn<P> } & P) => Sql<P>
 	): QueryFunction<P> {
 		const sqlFn: SqlFn<P> = (strings, ...params) => {
-			const paramNames = params
-				.filter((p): p is keyof P => typeof p === "string")
-				// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-				.filter((p) => p in (builder({ sql: sqlFn } as any) as any))
-			return new Sql<P>(strings, paramNames)
+			return new Sql<P>(strings, params)
 		}
 
-		const statement = builder({ sql: sqlFn } as { sql: SqlFn<P> } & P)
-
 		return <R>(params: PartialDeep<P>): R => {
-			this.#logger.debug("Executing query", { params })
+			const ctx = { sql: sqlFn, ...params } as { sql: SqlFn<P> } & P
+			const statement = builder(ctx)
 			const { sql, values } = statement.withParams(params as P)
 
 			try {
 				const stmt = this.prepareStatement(sql)
 				const result = stmt.all(...values) as R
-				this.#logger.trace("Query executed successfully", { sql, values })
 				return result
 			} catch (error) {
-				this.#logger.error("Query execution failed", { sql, values, error })
 				throw new NodeSqliteError(
 					"ERR_SQLITE_QUERY",
 					SqlitePrimaryResultCode.SQLITE_ERROR,
@@ -212,35 +218,24 @@ export class DB {
 
 	mutate<P extends UnknownRecord>(
 		builder: (ctx: { sql: SqlFn<P> } & P) => Sql<P>
-	): QueryFunction<P> {
+	): MutationFunction<P> {
 		const sqlFn: SqlFn<P> = (strings, ...params) => {
-			const paramNames = params
-				.filter((p): p is keyof P => typeof p === "string")
-				// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-				.filter((p) => p in (builder({ sql: sqlFn } as any) as any))
-			return new Sql<P>(strings, paramNames)
+			return new Sql<P>(strings, params)
 		}
 
-		const statement = builder({ sql: sqlFn } as { sql: SqlFn<P> } & P)
-
-		return <R>(params: PartialDeep<P>): R => {
-			this.#logger.debug("Executing mutation", { params })
+		return (params: PartialDeep<P>): MutationResult => {
+			const ctx = { sql: sqlFn, ...params } as { sql: SqlFn<P> } & P
+			const statement = builder(ctx)
 			const { sql, values } = statement.withParams(params as P)
 
 			try {
 				const stmt = this.prepareStatement(sql)
 				const result = stmt.run(...values)
-				this.#logger.trace("Mutation executed successfully", {
-					sql,
-					values,
-					changes: result.changes,
-				})
 				return {
 					changes: result.changes,
 					lastInsertRowid: result.lastInsertRowid,
-				} as R
+				}
 			} catch (error) {
-				this.#logger.error("Mutation failed", { sql, values, error })
 				throw new NodeSqliteError(
 					"ERR_SQLITE_MUTATE",
 					SqlitePrimaryResultCode.SQLITE_ERROR,
@@ -256,7 +251,9 @@ export class DB {
 		this.#logger.info("Starting database backup", { filename })
 		try {
 			this.#db.exec(`VACUUM INTO '${filename}'`)
-			this.#logger.info("Database backup completed successfully", { filename })
+			this.#logger.info("Database backup completed successfully", {
+				filename,
+			})
 		} catch (error) {
 			this.#logger.error("Backup failed", { filename, error })
 			throw new NodeSqliteError(

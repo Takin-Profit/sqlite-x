@@ -7,7 +7,7 @@ import {
 	type SupportedValueType,
 	type StatementSync,
 } from "node:sqlite"
-import type { UnknownRecord, PartialDeep, Primitive } from "type-fest"
+import type { UnknownRecord, PartialDeep } from "type-fest"
 import {
 	NodeSqliteError,
 	SqlitePrimaryResultCode,
@@ -28,8 +28,13 @@ import {
 import { tmpdir } from "node:os"
 import { accessSync, renameSync, unlinkSync } from "node:fs"
 import { type Logger, NoopLogger } from "./logger.js"
-
-type SqlParam = Primitive | Uint8Array
+import {
+	buildColumnsFromConfig,
+	ColumnBuilder,
+	type ColumnConfig,
+	type ColumnContext,
+	type ColumnsConfig,
+} from "#columns.js"
 
 class Sql<P extends UnknownRecord> {
 	constructor(
@@ -69,7 +74,7 @@ class Sql<P extends UnknownRecord> {
 
 type SqlFn<P extends UnknownRecord> = (
 	strings: TemplateStringsArray,
-	...params: Array<keyof P>
+	...params: Array<keyof P> | string[]
 ) => Sql<P>
 
 type QueryFunction<P extends UnknownRecord> = <R>(params: PartialDeep<P>) => R
@@ -202,8 +207,7 @@ export class DB {
 
 			try {
 				const stmt = this.prepareStatement(sql)
-				const result = stmt.all(...values) as R
-				return result
+				return stmt.all(...values) as R
 			} catch (error) {
 				throw new NodeSqliteError(
 					"ERR_SQLITE_QUERY",
@@ -217,14 +221,33 @@ export class DB {
 	}
 
 	mutate<P extends UnknownRecord>(
-		builder: (ctx: { sql: SqlFn<P> } & P) => Sql<P>
+		builder: (
+			ctx: {
+				sql: SqlFn<P>
+				column: ColumnContext<P>["column"]
+				columns: ColumnContext<P>["columns"]
+			} & P
+		) => Sql<P>
 	): MutationFunction<P> {
 		const sqlFn: SqlFn<P> = (strings, ...params) => {
 			return new Sql<P>(strings, params)
 		}
 
 		return (params: PartialDeep<P>): MutationResult => {
-			const ctx = { sql: sqlFn, ...params } as { sql: SqlFn<P> } & P
+			const columnBuilder = <K extends keyof P>(config: ColumnConfig<P, K>) =>
+				new ColumnBuilder<P>()
+
+			const ctx = {
+				sql: sqlFn,
+				column: columnBuilder,
+				columns: (config: ColumnsConfig<P>) => buildColumnsFromConfig(config),
+				...params,
+			} as {
+				sql: SqlFn<P>
+				column: ColumnContext<P>["column"]
+				columns: ColumnContext<P>["columns"]
+			} & P
+
 			const statement = builder(ctx)
 			const { sql, values } = statement.withParams(params as P)
 

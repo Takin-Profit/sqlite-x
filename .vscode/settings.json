@@ -5,6 +5,7 @@
         "RTRIM",
         "SAVEPOINT",
         "savepoints",
-        "SELEC"
+        "SELEC",
+        "takinprofit"
     ]
 }

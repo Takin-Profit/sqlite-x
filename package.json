@@ -1,24 +1,42 @@
 {
-  "name": "sqlitex",
+  "name": "@takinprofit/sqlite-x",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "A modern node:sqlite wrapper for TypeScript",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "require": {
+      "types": "./dist/index.d.cts",
+      "default": "./dist/index.cjs"
+    },
+    "import": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
-    "try": "tsx try",
+    "build": "tsup",
     "test": "tsx --test --experimental-sqlite src/**/*.test.ts"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "sqlite",
+    "database",
+    "wrapper",
+    "typescript",
+    "node:sqlite"
+  ],
+  "files": [
+    "dist"
+  ],
+  "author": "Takin Profit LLC",
+  "license": "MIT",
   "devDependencies": {
+    "@swc/core": "^1.10.8",
     "@types/node": "^22.10.5",
-    "@types/pg": "^8.11.10",
+    "tsup": "^8.3.5",
     "tsx": "^4.19.2",
     "type-fest": "^4.32.0"
-  },
-  "dependencies": {
-    "kysely": "^0.27.5",
-    "sql-template-tag": "^5.2.1",
-    "squid": "^0.5.2"
   }
 }

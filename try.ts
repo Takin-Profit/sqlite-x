@@ -29,145 +29,54 @@ import { tmpdir } from "node:os"
 import { accessSync, renameSync, unlinkSync } from "node:fs"
 import { type Logger, NoopLogger } from "./logger.js"
 
-import type stringifyLib from "fast-safe-stringify"
-import { createRequire } from "node:module"
-
-const stringify: typeof stringifyLib = createRequire(import.meta.url)(
-	"fast-safe-stringify"
-)
-
-type ValueOfOperator<P extends { [key: string]: unknown }> =
-	`@${keyof P & string}`
-type ToJson<P extends { [key: string]: unknown }> =
-	`${ValueOfOperator<P>}.toJson`
-type FromJson<P extends { [key: string]: unknown }> =
-	`${ValueOfOperator<P>}.fromJson`
-
-type ParamValue<P extends { [key: string]: unknown }> =
-	| ValueOfOperator<P>
-	| ToJson<P>
-	| FromJson<P>
-
-type SqlFn<P extends { [key: string]: unknown }> = (
-	strings: TemplateStringsArray,
-	...params: Array<ParamValue<P>>
-) => Sql<P>
-
-function toSupportedValue(value: unknown): SupportedValueType {
-	if (value === null) {
-		return null
-	}
-	if (
-		typeof value === "string" ||
-		typeof value === "number" ||
-		typeof value === "bigint" ||
-		value instanceof Uint8Array
-	) {
-		return value as SupportedValueType
-	}
-
-	// For objects and arrays, convert to string
-	return String(value)
-}
-
 class Sql<P extends { [key: string]: unknown }> {
-	readonly #strings: readonly string[]
-	readonly #paramOperators: ReadonlyArray<ParamValue<P>>
-	readonly #defaultParams: Partial<P>
-
 	constructor(
-		strings: readonly string[],
-		paramOperators: ReadonlyArray<ParamValue<P>>,
-		defaultParams: Partial<P> = {} as Partial<P>
-	) {
-		this.#strings = strings
-		this.#paramOperators = paramOperators
-		this.#defaultParams = defaultParams
-	}
-
-	#extractParamName(op: ParamValue<P>): keyof P {
-		const match = op.match(/^@([^.]+)/)
-		if (!match) {
-			throw new NodeSqliteError(
-				"ERR_SQLITE_PARAM",
-				SqlitePrimaryResultCode.SQLITE_ERROR,
-				"Invalid parameter format",
-				`Parameter operator "${op}" must start with @`,
-				undefined
-			)
-		}
-		return match[1] as keyof P
-	}
-
-	#isToJson(op: ParamValue<P>): boolean {
-		return op.endsWith(".toJson")
-	}
-
-	#isFromJson(op: ParamValue<P>): boolean {
-		return op.endsWith(".fromJson")
-	}
+		readonly strings: readonly string[],
+		readonly paramNames: ReadonlyArray<keyof P>,
+		readonly defaultParams: PartialDeep<P> = {} as PartialDeep<P>
+	) {}
 
 	get sql(): string {
-		let result = this.#strings[0]
-		for (let i = 0; i < this.#paramOperators.length; i++) {
-			const op = this.#paramOperators[i]
-			if (this.#isToJson(op)) {
-				// Use jsonb() for storing JSON values efficiently
-				result += `jsonb(?) ${this.#strings[i + 1]}`
-			} else if (this.#isFromJson(op)) {
-				// Use jsonb_extract for reading JSON values
-				result += `jsonb_extract(?, '$') ${this.#strings[i + 1]}`
-			} else {
-				result += `? ${this.#strings[i + 1]}`
-			}
+		const len = this.strings.length
+		let i = 1
+		let value = this.strings[0]
+		while (i < len) {
+			value += `?${this.strings[i++]}`
 		}
-		return result
+		return value
 	}
 
 	withParams(params: P): { sql: string; values: SupportedValueType[] } {
-		const values = this.#paramOperators.map((op) => {
-			const paramName = this.#extractParamName(op)
-			const value =
-				paramName in params ? params[paramName] : this.#defaultParams[paramName]
-
-			// Only throw for undefined, allow null to pass through
+		const values = this.paramNames.map((name) => {
+			const value = params[name]
 			if (value === undefined) {
 				throw new NodeSqliteError(
 					"ERR_SQLITE_PARAM",
 					SqlitePrimaryResultCode.SQLITE_ERROR,
 					"Missing parameter",
-					`Parameter '${String(paramName)}' is undefined`,
+					`Parameter '${String(name)}' is undefined`,
 					undefined
 				)
 			}
-
-			if (this.#isToJson(op)) {
-				// Use fast-safe-stringify for reliable JSON serialization
-				return toSupportedValue(
-					typeof value === "object" && value !== null
-						? stringify(value)
-						: String(value)
-				)
-			}
-
-			if (this.#isFromJson(op)) {
-				// For FromJson, we expect the value to already be JSON text or JSONB
-				return toSupportedValue(value)
-			}
-
-			return toSupportedValue(value)
+			return value as SupportedValueType
 		})
 
 		return { sql: this.sql, values }
 	}
 }
 
-export function sql<P extends { [key: string]: unknown }>(
+type ValueOfOperator<P extends { [key: string]: unknown }> =
+	`@${keyof P & string}`
+type FromJson<P extends { [key: string]: unknown }> =
+	`${ValueOfOperator<P>}.fromJSON()`
+
+type ParamValue<P extends { [key: string]: unknown }> =
+	| ValueOfOperator<P>
+	| FromJson<P>
+type SqlFn<P extends { [key: string]: unknown }> = (
 	strings: TemplateStringsArray,
 	...params: Array<ParamValue<P>>
-): Sql<P> {
-	return new Sql(strings, params)
-}
+) => Sql<P>
 
 type QueryFunction<P extends { [key: string]: unknown }> = <R>(
 	params: PartialDeep<P>
@@ -288,43 +197,20 @@ export class DB {
 	}
 
 	query<P extends { [key: string]: unknown }>(
-		builder: (ctx: { sql: SqlFn<P> }) => Sql<P>
+		builder: (ctx: { sql: SqlFn<P> } & P) => Sql<P>
 	): QueryFunction<P> {
 		const sqlFn: SqlFn<P> = (strings, ...params) => {
 			return new Sql<P>(strings, params)
 		}
 
 		return <R>(params: PartialDeep<P>): R => {
-			// Pass just the sql helper to avoid parameter conflicts
-			const statement = builder({ sql: sqlFn })
+			const ctx = { sql: sqlFn, ...params } as { sql: SqlFn<P> } & P
+			const statement = builder(ctx)
 			const { sql, values } = statement.withParams(params as P)
 
 			try {
 				const stmt = this.prepareStatement(sql)
-				// Since sqlite doesn't auto-parse JSON, we need to handle FromJson results
-				const results = stmt.all(...values) as R
-				if (Array.isArray(results)) {
-					// For array results, parse any FromJson fields
-					return results.map((row) => {
-						if (typeof row === "object" && row !== null) {
-							return Object.fromEntries(
-								Object.entries(row).map(([key, value]) => {
-									// If the field ends with fromJson, parse it
-									if (key.endsWith("fromJson") && typeof value === "string") {
-										try {
-											return [key.replace(/fromJson$/, ""), JSON.parse(value)]
-										} catch {
-											return [key.replace(/fromJson$/, ""), value]
-										}
-									}
-									return [key, value]
-								})
-							)
-						}
-						return row
-					}) as R
-				}
-				return results
+				return stmt.all(...values) as R
 			} catch (error) {
 				throw new NodeSqliteError(
 					"ERR_SQLITE_QUERY",
@@ -338,37 +224,25 @@ export class DB {
 	}
 
 	mutation<P extends { [key: string]: unknown }>(
-		builder: (ctx: { sql: SqlFn<P> }) => Sql<P>
+		builder: (ctx: { sql: SqlFn<P> } & P) => Sql<P>
 	): MutationFunction<P> {
+		const sqlFn: SqlFn<P> = (strings, ...params) => {
+			return new Sql<P>(strings, params)
+		}
+
 		return (params: PartialDeep<P>): MutationResult => {
-			const sqlFn: SqlFn<P> = (strings, ...params) =>
-				new Sql<P>(strings, params)
-
-			const statement = builder({ sql: sqlFn })
+			const ctx = { sql: sqlFn, ...params } as { sql: SqlFn<P> } & P
+			const statement = builder(ctx)
 			const { sql, values } = statement.withParams(params as P)
-
-			this.#logger.debug("Executing mutation", { sql })
 
 			try {
 				const stmt = this.prepareStatement(sql)
 				const result = stmt.run(...values)
-
-				this.#logger.debug("Mutation completed", {
-					changes: result.changes,
-					lastInsertRowid: result.lastInsertRowid,
-				})
-
 				return {
 					changes: result.changes,
 					lastInsertRowid: result.lastInsertRowid,
 				}
 			} catch (error) {
-				this.#logger.error("Mutation failed", { sql, error })
-
-				if (isNodeSqliteError(error)) {
-					throw NodeSqliteError.fromNodeSqlite(error)
-				}
-
 				throw new NodeSqliteError(
 					"ERR_SQLITE_MUTATE",
 					SqlitePrimaryResultCode.SQLITE_ERROR,
@@ -379,6 +253,7 @@ export class DB {
 			}
 		}
 	}
+
 	backup(filename: string): void {
 		this.#logger.info("Starting database backup", { filename })
 		try {

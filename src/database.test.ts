@@ -13,7 +13,6 @@ let backupPath: string
 
 beforeEach(() => {
 	try {
-		console.log("running beforeEach")
 		dbPath = join(tmpdir(), `test-${Date.now()}.db`)
 		backupPath = join(tmpdir(), `backup-${Date.now()}.db`)
 
@@ -52,7 +51,6 @@ beforeEach(() => {
 afterEach(() => {
 	db.close()
 	try {
-		console.log("running afterEach")
 		rm(dbPath, () => {})
 		rm(backupPath, () => {})
 	} catch (err) {
@@ -61,10 +59,10 @@ afterEach(() => {
 })
 
 test("executes basic SELECT query", () => {
-	const insertUser = db.mutate<{ name: string; age: number; email: string }>(
+	const insertUser = db.mutation<{ name: string; age: number; email: string }>(
 		({ sql }) => sql`
             INSERT INTO users (name, age, email)
-            VALUES (${"name"}, ${"age"}, ${"email"})
+            VALUES (${"@name"}, ${"@age"}, ${"@email"})
         `
 	)
 
@@ -75,7 +73,7 @@ test("executes basic SELECT query", () => {
 		({ sql }) => sql`
             SELECT name, age, email
             FROM users
-            WHERE age >= ${"minAge"}
+            WHERE age >= ${"@minAge"}
         `
 	)
 
@@ -91,10 +89,10 @@ test("executes basic SELECT query", () => {
 })
 
 test("handles complex WHERE conditions", () => {
-	const insertUser = db.mutate<{ name: string; age: number; email: string }>(
+	const insertUser = db.mutation<{ name: string; age: number; email: string }>(
 		({ sql }) => sql`
             INSERT INTO users (name, age, email)
-            VALUES (${"name"}, ${"age"}, ${"email"})
+            VALUES (${"@name"}, ${"@age"}, ${"@email"})
         `
 	)
 
@@ -105,8 +103,8 @@ test("handles complex WHERE conditions", () => {
 	const getUsers = db.query<{ minAge: number; nameLike: string }>(
 		({ sql }) => sql`
             SELECT * FROM users
-            WHERE age >= ${"minAge"}
-            AND name LIKE ${"nameLike"}
+            WHERE age >= ${"@minAge"}
+            AND name LIKE ${"@nameLike"}
         `
 	)
 
@@ -120,10 +118,10 @@ test("handles complex WHERE conditions", () => {
 })
 
 test("performs INSERT operation", () => {
-	const insertUser = db.mutate<{ name: string; age: number; email: string }>(
+	const insertUser = db.mutation<{ name: string; age: number; email: string }>(
 		({ sql }) => sql`
             INSERT INTO users (name, age, email)
-            VALUES (${"name"}, ${"age"}, ${"email"})
+            VALUES (${"@name"}, ${"@age"}, ${"@email"})
         `
 	)
 
@@ -138,10 +136,10 @@ test("performs INSERT operation", () => {
 })
 
 test("performs UPDATE operation", () => {
-	const insertUser = db.mutate<{ name: string; age: number; email: string }>(
+	const insertUser = db.mutation<{ name: string; age: number; email: string }>(
 		({ sql }) => sql`
             INSERT INTO users (name, age, email)
-            VALUES (${"name"}, ${"age"}, ${"email"})
+            VALUES (${"@name"}, ${"@age"}, ${"@email"})
         `
 	)
 
@@ -151,11 +149,11 @@ test("performs UPDATE operation", () => {
 		email: "john@example.com",
 	})
 
-	const updateUser = db.mutate<{ id: number | bigint; newAge: number }>(
+	const updateUser = db.mutation<{ id: number | bigint; newAge: number }>(
 		({ sql }) => sql`
             UPDATE users
-            SET age = ${"newAge"}
-            WHERE id = ${"id"}
+            SET age = ${"@newAge"}
+            WHERE id = ${"@id"}
         `
 	)
 
@@ -168,10 +166,10 @@ test("performs UPDATE operation", () => {
 })
 
 test("performs DELETE operation", () => {
-	const insertUser = db.mutate<{ name: string; age: number; email: string }>(
+	const insertUser = db.mutation<{ name: string; age: number; email: string }>(
 		({ sql }) => sql`
             INSERT INTO users (name, age, email)
-            VALUES (${"name"}, ${"age"}, ${"email"})
+            VALUES (${"@name"}, ${"@age"}, ${"@email"})
         `
 	)
 
@@ -181,10 +179,10 @@ test("performs DELETE operation", () => {
 		email: "john@example.com",
 	})
 
-	const deleteUser = db.mutate<{ id: number | bigint }>(
+	const deleteUser = db.mutation<{ id: number | bigint }>(
 		({ sql }) => sql`
             DELETE FROM users
-            WHERE id = ${"id"}
+            WHERE id = ${"@id"}
         `
 	)
 
@@ -193,10 +191,10 @@ test("performs DELETE operation", () => {
 })
 
 test("handles unique constraint violations", () => {
-	const insertUser = db.mutate<{ name: string; age: number; email: string }>(
+	const insertUser = db.mutation<{ name: string; age: number; email: string }>(
 		({ sql }) => sql`
             INSERT INTO users (name, age, email)
-            VALUES (${"name"}, ${"age"}, ${"email"})
+            VALUES (${"@name"}, ${"@age"}, ${"@email"})
         `
 	)
 
@@ -220,10 +218,10 @@ test("handles unique constraint violations", () => {
 })
 
 test("handles foreign key constraints", () => {
-	const insertPost = db.mutate<{ title: string; userId: number }>(
+	const insertPost = db.mutation<{ title: string; userId: number }>(
 		({ sql }) => sql`
             INSERT INTO posts (title, user_id)
-            VALUES (${"title"}, ${"userId"})
+            VALUES (${"@title"}, ${"@userId"})
         `
 	)
 
@@ -240,11 +238,14 @@ test("handles foreign key constraints", () => {
 })
 
 test("enforces NOT NULL constraints", () => {
-	const insertUser = db.mutate<{ name: string | null; age: number }>(
+	const insertUser = db.mutation<{
+		name: string | null
+		age: number
+	}>(
 		({ sql }) => sql`
-            INSERT INTO users (name, age)
-            VALUES (${"name"}, ${"age"})
-        `
+      INSERT INTO users (name, age)
+      VALUES (${"@name"}, ${"@age"})
+    `
 	)
 
 	assert.throws(
@@ -253,17 +254,25 @@ test("enforces NOT NULL constraints", () => {
 				name: null,
 				age: 30,
 			}),
-		(error) =>
-			error instanceof NodeSqliteError &&
-			error.message.includes("NOT NULL constraint")
+		(error: unknown) => {
+			if (!(error instanceof NodeSqliteError)) {
+				return false
+			}
+
+			return (
+				error.code === "ERR_SQLITE_ERROR" &&
+				error.errcode === 1299 &&
+				error.message.includes("NOT NULL constraint failed: users.name")
+			)
+		}
 	)
 })
 
 test("creates and restores from backup", () => {
-	const insertUser = db.mutate<{ name: string; age: number; email: string }>(
+	const insertUser = db.mutation<{ name: string; age: number; email: string }>(
 		({ sql }) => sql`
             INSERT INTO users (name, age, email)
-            VALUES (${"name"}, ${"age"}, ${"email"})
+            VALUES (${"@name"}, ${"@age"}, ${"@email"})
         `
 	)
 
@@ -319,7 +328,7 @@ test("caches prepared statements", () => {
 		// Use dbWithCache here
 		({ sql }) => sql`
             SELECT * FROM users
-            WHERE age > ${"minAge"}
+            WHERE age > ${"@minAge"}
         `
 	)
 
@@ -374,7 +383,7 @@ test("handles syntax errors", () => {
 test("handles missing parameters", () => {
 	const query = db.query<{ name: string }>(
 		({ sql }) => sql`
-            SELECT * FROM users WHERE name = ${"name"}
+            SELECT * FROM users WHERE name = ${"@name"}
         `
 	)
 

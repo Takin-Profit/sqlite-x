@@ -210,6 +210,48 @@ export class DB {
 		}
 	}
 
+	mutate<P extends UnknownRecord>(
+		builder: (ctx: { sql: SqlFn<P> } & P) => Sql<P>
+	): QueryFunction<P> {
+		const sqlFn: SqlFn<P> = (strings, ...params) => {
+			const paramNames = params
+				.filter((p): p is keyof P => typeof p === "string")
+				// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+				.filter((p) => p in (builder({ sql: sqlFn } as any) as any))
+			return new Sql<P>(strings, paramNames)
+		}
+
+		const statement = builder({ sql: sqlFn } as { sql: SqlFn<P> } & P)
+
+		return <R>(params: PartialDeep<P>): R => {
+			this.#logger.debug("Executing mutation", { params })
+			const { sql, values } = statement.withParams(params as P)
+
+			try {
+				const stmt = this.prepareStatement(sql)
+				const result = stmt.run(...values)
+				this.#logger.trace("Mutation executed successfully", {
+					sql,
+					values,
+					changes: result.changes,
+				})
+				return {
+					changes: result.changes,
+					lastInsertRowid: result.lastInsertRowid,
+				} as R
+			} catch (error) {
+				this.#logger.error("Mutation failed", { sql, values, error })
+				throw new NodeSqliteError(
+					"ERR_SQLITE_MUTATE",
+					SqlitePrimaryResultCode.SQLITE_ERROR,
+					"Mutation failed",
+					error instanceof Error ? error.message : String(error),
+					error instanceof Error ? error : undefined
+				)
+			}
+		}
+	}
+
 	backup(filename: string): void {
 		this.#logger.info("Starting database backup", { filename })
 		try {

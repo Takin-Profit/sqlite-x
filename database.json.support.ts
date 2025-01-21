@@ -8,23 +8,23 @@ import {
 	NodeSqliteError,
 	SqlitePrimaryResultCode,
 	isNodeSqliteError,
-} from "#errors"
+} from "./errors.js"
 import {
 	createStatementCache,
 	type StatementCache,
 	type CacheStats,
 	type StatementCacheOptions,
-} from "#cache"
+} from "./cache.js"
 import { join } from "node:path"
 import {
 	type PragmaConfig,
 	PragmaDefaults,
 	getPragmaStatements,
-} from "#pragmas"
+} from "./pragmas.js"
 import { tmpdir } from "node:os"
 import { accessSync, renameSync, unlinkSync } from "node:fs"
-import { type Logger, NoopLogger } from "#logger"
-import { processQueryResults, Sql, type SqlFn } from "#sql"
+import { type Logger, NoopLogger } from "./logger.js"
+import { Sql, type SqlFn } from "#sql.js"
 
 type QueryFunction<P extends { [key: string]: unknown }> = <R>(
 	params: PartialDeep<P>
@@ -150,40 +150,41 @@ export class DB {
 		builder: (ctx: { sql: SqlFn<P> }) => Sql<P>
 	): QueryFunction<P> {
 		const sqlFn: SqlFn<P> = (strings, ...params) => {
-			console.log("[Database.query] Creating SQL with strings:", strings)
-			console.log("[Database.query] and params:", params)
 			return new Sql<P>(strings, params)
 		}
 
 		return <R>(params: PartialDeep<P>): R => {
-			console.log("[Database.query] Executing query with params:", params)
+			// Pass just the sql helper to avoid parameter conflicts
 			const statement = builder({ sql: sqlFn })
-			const { sql, values, jsonColumns } = statement.withParams(params as P)
-
-			console.log("[Database.query] Prepared statement:", {
-				sql,
-				values,
-				jsonColumns,
-			})
+			const { sql, values } = statement.withParams(params as P)
 
 			try {
 				const stmt = this.prepareStatement(sql)
-
-				// Log the prepared statement details
-				console.log("[Database.query] Statement info:", {
-					expandedSQL: stmt.expandedSQL,
-					sourceSQL: stmt.sourceSQL,
-				})
-
-				const rawResults = processQueryResults(stmt, values, jsonColumns)
-
-				console.log(
-					`[Database.query] Processed results: ${JSON.stringify(rawResults)}`
-				)
-
-				return rawResults as R
+				// Since sqlite doesn't auto-parse JSON, we need to handle FromJson results
+				const results = stmt.all(...values) as R
+				if (Array.isArray(results)) {
+					// For array results, parse any FromJson fields
+					return results.map((row) => {
+						if (typeof row === "object" && row !== null) {
+							return Object.fromEntries(
+								Object.entries(row).map(([key, value]) => {
+									// If the field ends with fromJson, parse it
+									if (key.endsWith("fromJson") && typeof value === "string") {
+										try {
+											return [key.replace(/fromJson$/, ""), JSON.parse(value)]
+										} catch {
+											return [key.replace(/fromJson$/, ""), value]
+										}
+									}
+									return [key, value]
+								})
+							)
+						}
+						return row
+					}) as R
+				}
+				return results
 			} catch (error) {
-				console.error("[Database.query] Error executing query:", error)
 				throw new NodeSqliteError(
 					"ERR_SQLITE_QUERY",
 					SqlitePrimaryResultCode.SQLITE_ERROR,
@@ -202,25 +203,28 @@ export class DB {
 			const sqlFn: SqlFn<P> = (strings, ...params) =>
 				new Sql<P>(strings, params)
 			const statement = builder({ sql: sqlFn })
-			const { sql, values, jsonColumns } = statement.withParams(
-				params as P,
-				true
-			)
-
-			console.log(
-				`[Database.mutation] Prepared statement: ${sql}, values: ${values}, jsonColumns: ${jsonColumns}`
-			)
+			const { sql, values } = statement.withParams(params as P)
 			this.#logger.debug("Executing mutation", { sql })
 			try {
 				const stmt = this.prepareStatement(sql)
+				const result = stmt.run(...values)
 
-				const results = processQueryResults(stmt, values, jsonColumns)
+				// Only try to get rows if there's a RETURNING clause
+				if (sql.toUpperCase().includes("RETURNING")) {
+					const rows = stmt.all()
+					if (rows.length > 0) {
+						return rows as R
+					}
+				}
 
-				console.log(
-					`[Database.mutation] Processed results: ${JSON.stringify(results)}`
-				)
-
-				return results as R
+				this.#logger.debug("Mutation completed", {
+					changes: result.changes,
+					lastInsertRowid: result.lastInsertRowid,
+				})
+				return {
+					changes: result.changes,
+					lastInsertRowid: result.lastInsertRowid,
+				} as R
 			} catch (error) {
 				this.#logger.error("Mutation failed", { sql, error })
 				if (isNodeSqliteError(error)) {

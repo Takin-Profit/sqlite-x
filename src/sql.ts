@@ -1,0 +1,403 @@
+// Copyright 2025 Takin Profit. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+// noinspection t
+
+import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors.js"
+import type stringifyLib from "fast-safe-stringify"
+import { createRequire } from "node:module"
+import type {
+	StatementResultingChanges,
+	StatementSync,
+	SupportedValueType,
+} from "node:sqlite"
+import type { PartialDeep } from "type-fest"
+
+const stringify: typeof stringifyLib = createRequire(import.meta.url)(
+	"fast-safe-stringify"
+)
+
+/**
+ * Represents a parameter operator that references a property of type P
+ */
+type ValueOfOperator<P extends { [key: string]: unknown }> =
+	`@${keyof P & string}`
+
+/**
+ * Represents a parameter operator that converts a property to JSON
+ */
+type ToJson<P extends { [key: string]: unknown }> =
+	`${ValueOfOperator<P>}.toJson`
+
+/**
+ * Represents a parameter operator that parses a property from JSON
+ */
+type FromJson<P extends { [key: string]: unknown }> =
+	`${ValueOfOperator<P>}.fromJson`
+
+/**
+ * Union type of all possible parameter operators
+ */
+type ParamValue<P extends { [key: string]: unknown }> =
+	| ValueOfOperator<P>
+	| ToJson<P>
+	| FromJson<P>
+
+/**
+ * Function type for SQL template literal tag
+ */
+export type SqlFn<P extends { [key: string]: unknown }> = (
+	strings: TemplateStringsArray,
+	...params: Array<ParamValue<P>>
+) => Sql<P>
+
+function toSupportedValue(value: unknown): SupportedValueType {
+	if (
+		value === null ||
+		typeof value === "string" ||
+		typeof value === "number" ||
+		typeof value === "bigint" ||
+		value instanceof Uint8Array
+	) {
+		return value as SupportedValueType
+	}
+	return String(value)
+}
+
+export class Sql<P extends { [key: string]: unknown }> {
+	readonly #strings: readonly string[]
+	readonly #paramOperators: ReadonlyArray<ParamValue<P>>
+	readonly #defaultParams: Partial<P>
+	readonly #jsonColumns = new Set<string>()
+
+	constructor(
+		strings: readonly string[],
+		paramOperators: ReadonlyArray<ParamValue<P>>,
+		defaultParams: Partial<P> = {} as Partial<P>
+	) {
+		console.log("[SQL Constructor] Creating new SQL instance")
+		this.#strings = strings
+		this.#paramOperators = paramOperators
+		this.#defaultParams = defaultParams
+	}
+
+	#extractParamName(op: ParamValue<P>): keyof P {
+		console.log("[extractParamName] Processing operator:", op)
+		const match = op.match(/^@([^.]+)/)
+		if (!match) {
+			throw new NodeSqliteError(
+				"ERR_SQLITE_PARAM",
+				SqlitePrimaryResultCode.SQLITE_ERROR,
+				"Invalid parameter format",
+				`Parameter operator "${op}" must start with @`,
+				undefined
+			)
+		}
+		console.log("[extractParamName] Extracted name:", match[1])
+		return match[1] as keyof P
+	}
+
+	#isToJson(op: ParamValue<P>): boolean {
+		if (op.endsWith(".toJson")) {
+			const columnName = op.split(".")[0].substring(1)
+			this.#jsonColumns.add(columnName)
+			return true
+		}
+		return false
+	}
+
+	#isFromJson(op: ParamValue<P>): boolean {
+		if (op.endsWith(".fromJson")) {
+			console.log("[isFromJson] Found fromJson operator")
+			const columnName = op.split(".")[0].substring(1)
+			this.#jsonColumns.add(columnName)
+			return true
+		}
+		return false
+	}
+
+	get sql(): string {
+		let result = this.#strings[0]
+		console.log("[sql] Initial SQL:", result)
+
+		for (let i = 0; i < this.#paramOperators.length; i++) {
+			const op = this.#paramOperators[i]
+			console.log("[sql] Processing operator:", op)
+
+			if (this.#isToJson(op)) {
+				console.log("[sql] Adding toJson operation")
+				result += `json(?) ${this.#strings[i + 1]}`
+			} else if (this.#isFromJson(op)) {
+				console.log("[sql] Adding fromJson operation")
+				const columnName = op.split(".")[0].substring(1)
+				result += `json_extract(${columnName}, '$') ${this.#strings[i + 1]}`
+			} else {
+				console.log("[sql] Adding regular parameter")
+				result += `? ${this.#strings[i + 1]}`
+			}
+		}
+
+		console.log("[sql] Final SQL:", result)
+		console.log("[sql] JSON columns:", Array.from(this.#jsonColumns))
+		return result
+	}
+	withParams(
+		params: P,
+		isMutation = false
+	): {
+		sql: string
+		values: SupportedValueType[]
+		jsonColumns: string[]
+	} {
+		console.log("[withParams] Processing parameters:", params)
+
+		const values = this.#paramOperators
+			.map((op) => {
+				// For fromJson operations in queries, we don't need any values at all
+				if (this.#isFromJson(op) && !isMutation) {
+					return null
+				}
+
+				const paramName = this.#extractParamName(op)
+				const value =
+					paramName in params
+						? params[paramName]
+						: this.#defaultParams[paramName]
+
+				console.log(`[withParams] Processing ${String(paramName)}:`, value)
+
+				// Only mutations need to check for missing parameters
+				if (value === undefined && isMutation) {
+					throw new NodeSqliteError(
+						"ERR_SQLITE_PARAM",
+						SqlitePrimaryResultCode.SQLITE_ERROR,
+						"Missing parameter",
+						`Parameter '${String(paramName)}' is undefined`,
+						undefined
+					)
+				}
+
+				if (this.#isToJson(op)) {
+					console.log("[withParams] Converting to JSON:", value)
+					return typeof value === "string" ? value : stringify(value)
+				}
+
+				return toSupportedValue(value)
+			})
+			.filter((value): value is NonNullable<typeof value> => value !== null)
+
+		const jsonColumns = Array.from(this.#jsonColumns)
+		console.log("[withParams] Final values:", values)
+		console.log("[withParams] JSON columns:", jsonColumns)
+
+		return {
+			sql: this.sql,
+			values,
+			jsonColumns,
+		}
+	}
+}
+
+/**
+ * Creates a new SQL query with parameter bindings
+ */
+export function sql<P extends { [key: string]: unknown }>(
+	strings: TemplateStringsArray,
+	...params: Array<ParamValue<P>>
+): Sql<P> {
+	return new Sql(strings, params)
+}
+
+/**
+ * Standard interface for database mutations
+ */
+export interface MutationResult {
+	changes: number | bigint
+	lastInsertRowid: number | bigint
+}
+
+/**
+ * Interface for prepared statements with type safety
+ */
+export interface PreparedStatement<T> {
+	all(): T[]
+	expandedSQL: string
+	iterate(): Iterator<T>
+	get(): T | undefined
+	run(): StatementResultingChanges
+	sourceSQL: string
+}
+
+/**
+ * Helper function to parse JSON columns in result rows
+ */
+export function parseJsonColumns(
+	row: Record<string, unknown>,
+	jsonColumns: string[]
+): Record<string, unknown> {
+	if (!row || !jsonColumns.length) {
+		return row
+	}
+
+	const result = { ...row }
+
+	// Handle every field in the row that's a string and try to parse it
+	for (const [key, value] of Object.entries(result)) {
+		if (typeof value === "string") {
+			try {
+				result[key] = JSON.parse(value)
+			} catch {
+				// Keep original value if parsing fails
+			}
+		}
+	}
+	return result
+}
+/**
+ * Creates a type-safe prepared statement
+ */
+export function createPreparedStatement<T>(
+	stmt: StatementSync,
+	values: SupportedValueType[],
+	jsonColumns: string[] = []
+): PreparedStatement<T> {
+	return {
+		all: () =>
+			stmt
+				.all(...values)
+				.map((row) =>
+					parseJsonColumns(row as Record<string, unknown>, jsonColumns)
+				) as T[],
+
+		get: () => {
+			const row = stmt.get(...values)
+			return row
+				? (parseJsonColumns(row as Record<string, unknown>, jsonColumns) as T)
+				: undefined
+		},
+
+		run: () => stmt.run(...values),
+
+		iterate: () => {
+			// @ts-expect-error -- node:sqlite types are incomplete
+			const baseIterator = stmt.iterate(...values)
+			return {
+				next(): IteratorResult<T> {
+					const result = baseIterator.next()
+					if (result.done) {
+						return { done: true, value: undefined }
+					}
+					return {
+						done: false,
+						value: parseJsonColumns(
+							result.value as Record<string, unknown>,
+							jsonColumns
+						) as T,
+					}
+				},
+			}
+		},
+
+		get expandedSQL() {
+			return stmt.expandedSQL
+		},
+		get sourceSQL() {
+			return stmt.sourceSQL
+		},
+	}
+}
+
+/**
+ * Interface for binding parameters to prepared statements
+ */
+export type StatementBinder<P extends { [key: string]: unknown }, T> = {
+	bind(params: PartialDeep<P>): PreparedStatement<T>
+}
+
+/**
+ * Creates a type-safe statement binder
+ */
+export function createStatementBinder<P extends { [key: string]: unknown }, T>(
+	statement: Sql<P>,
+	prepareStatement: (sql: string) => StatementSync
+): StatementBinder<P, T> {
+	return {
+		bind: (params: PartialDeep<P>) => {
+			const { sql, values, jsonColumns } = statement.withParams(params as P)
+			const stmt = prepareStatement(sql)
+			return createPreparedStatement<T>(stmt, values, jsonColumns)
+		},
+	}
+}
+
+export function processRow(
+	row: Record<string, unknown>
+): Record<string, unknown> {
+	console.log("[processRow] Processing row:", row)
+	const result: Record<string, unknown> = {}
+
+	for (const [key, value] of Object.entries(row)) {
+		console.log(`[processRow] Processing column ${key}:`, value)
+		if (typeof value === "string") {
+			try {
+				const parsed = JSON.parse(value)
+				console.log(`[processRow] Parsed JSON in column ${key}:`, parsed)
+				result[key] = parsed
+			} catch (e) {
+				console.log(`[processRow] Using raw value for column ${key}:`, value)
+				result[key] = value
+			}
+		} else {
+			console.log(`[processRow] Using raw value for column ${key}:`, value)
+			result[key] = value
+		}
+	}
+
+	console.log("[processRow] Final processed row:", result)
+	return result
+}
+
+/**
+ * Processes query results from a prepared statement, handling both single and multiple rows
+ * and parsing JSON columns as needed.
+ *
+ * @template R - The expected return type
+ * @param stmt - The prepared statement to execute
+ * @param values - Parameter values to bind
+ * @param jsonColumns - Names of columns containing JSON data
+ * @returns Processed query results of type R
+ */
+export function processQueryResults<R>(
+	stmt: StatementSync,
+	values: SupportedValueType[],
+	jsonColumns: string[]
+): R {
+	// Execute the statement with provided values
+	const results = stmt.all(...values)
+
+	console.log("[processQueryResults] Processing results:", results)
+
+	// No results case
+	if (!results || !results.length) {
+		return (Array.isArray(results) ? [] : undefined) as R
+	}
+
+	// Array results case
+	if (Array.isArray(results)) {
+		return results.map((row) =>
+			parseJsonColumns(row as Record<string, unknown>, jsonColumns)
+		) as R
+	}
+
+	// Single object result case
+	if (typeof results === "object") {
+		console.log("[processQueryResults] Single object result:", results)
+		return parseJsonColumns(
+			results as Record<string, unknown>,
+			jsonColumns
+		) as R
+	}
+
+	// Primitive value case
+	return results as R
+}

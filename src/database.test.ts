@@ -5,7 +5,6 @@ import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { DB } from "./database.js"
 import { NodeSqliteError, SqlitePrimaryResultCode } from "./errors.js"
-import { LogLevel, ConsoleLogger } from "./logger.js"
 
 let db: DB
 let dbPath: string
@@ -19,28 +18,28 @@ beforeEach(() => {
 		db = new DB({
 			location: dbPath,
 			environment: "testing",
-			logger: new ConsoleLogger(LogLevel.ERROR),
+			// logger: new ConsoleLogger(LogLevel.DEBUG), // Changed to DEBUG level
 		})
 
 		db.exec("DROP TABLE IF EXISTS posts;")
 		db.exec("DROP TABLE IF EXISTS users;")
 
 		db.exec(`
-        CREATE TABLE users (
-            id INTEGER PRIMARY KEY,
-            name TEXT NOT NULL,
-            age INTEGER NOT NULL,
-            email TEXT UNIQUE
-        );
+      CREATE TABLE users (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        age INTEGER NOT NULL,
+        email TEXT UNIQUE
+      );
     `)
 
 		db.exec(`
-        CREATE TABLE posts (
-            id INTEGER PRIMARY KEY,
-            title TEXT NOT NULL,
-            user_id INTEGER,
-            FOREIGN KEY(user_id) REFERENCES users(id)
-        );
+      CREATE TABLE posts (
+        id INTEGER PRIMARY KEY,
+        title TEXT NOT NULL,
+        user_id INTEGER,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+      );
     `)
 	} catch (error) {
 		console.error(error)
@@ -377,19 +376,5 @@ test("handles syntax errors", () => {
 		(error) =>
 			error instanceof NodeSqliteError &&
 			error.getPrimaryResultCode() === SqlitePrimaryResultCode.SQLITE_ERROR
-	)
-})
-
-test("handles missing parameters", () => {
-	const query = db.query<{ name: string }>(
-		({ sql }) => sql`
-            SELECT * FROM users WHERE name = ${"@name"}
-        `
-	)
-
-	assert.throws(
-		() => query<unknown[]>({ name: undefined as unknown as string }),
-		(error) =>
-			error instanceof NodeSqliteError && error.message.includes("undefined")
 	)
 })

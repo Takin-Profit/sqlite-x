@@ -139,14 +139,14 @@ export class DB {
 		builder: (ctx: { sql: SqlFn<P> }) => Sql<P>
 	): XStatementSync<P, R> {
 		return createXStatementSync<P, R>((params) => {
-			const { sql, values, jsonColumns } = builder({
+			const { sql, values, hasJsonColumns } = builder({
 				sql: (strings, ...params) => {
 					return new Sql<P>(strings, params)
 				},
 			}).withParams(params)
 			const stmt = this.prepareStatement(sql)
 
-			return { stmt, values, jsonColumns }
+			return { stmt, values, hasJsonColumns }
 		})
 	}
 
@@ -154,14 +154,14 @@ export class DB {
 		builder: (ctx: { sql: SqlFn<P> }) => Sql<P>
 	): XStatementSync<P, R> {
 		return createXStatementSync<P, R>((params) => {
-			const { sql, values, jsonColumns } = builder({
+			const { sql, values, hasJsonColumns } = builder({
 				sql: (strings, ...params) => {
 					return new Sql<P>(strings, params)
 				},
 			}).withParams(params)
 			const stmt = this.prepareStatement(sql)
 
-			return { stmt, values, jsonColumns }
+			return { stmt, values, hasJsonColumns }
 		})
 	}
 
@@ -303,7 +303,8 @@ export class DB {
 			this.#logger.error("Failed to configure pragmas", { error })
 			if (isNodeSqliteError(error)) {
 				if (
-					error.getPrimaryResultCode() === SqlitePrimaryResultCode.SQLITE_BUSY
+					NodeSqliteError.fromNodeSqlite(error).getPrimaryResultCode() ===
+					SqlitePrimaryResultCode.SQLITE_BUSY
 				) {
 					throw new NodeSqliteError(
 						"ERR_SQLITE_BUSY",

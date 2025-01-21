@@ -8,23 +8,23 @@ import {
 	NodeSqliteError,
 	SqlitePrimaryResultCode,
 	isNodeSqliteError,
-} from "./errors.js"
+} from "#errors"
 import {
 	createStatementCache,
 	type StatementCache,
 	type CacheStats,
 	type StatementCacheOptions,
-} from "./cache.js"
+} from "#cache"
 import { join } from "node:path"
 import {
 	type PragmaConfig,
 	PragmaDefaults,
 	getPragmaStatements,
-} from "./pragmas.js"
+} from "#pragmas"
 import { tmpdir } from "node:os"
 import { accessSync, renameSync, unlinkSync } from "node:fs"
-import { type Logger, NoopLogger } from "./logger.js"
-import { Sql, type SqlFn } from "#sql.js"
+import { type Logger, NoopLogger } from "#logger"
+import { processQueryResults, Sql, type SqlFn } from "#sql"
 
 type QueryFunction<P extends { [key: string]: unknown }> = <R>(
 	params: PartialDeep<P>
@@ -154,36 +154,15 @@ export class DB {
 		}
 
 		return <R>(params: PartialDeep<P>): R => {
-			// Pass just the sql helper to avoid parameter conflicts
 			const statement = builder({ sql: sqlFn })
-			const { sql, values } = statement.withParams(params as P)
+			const { sql, values, jsonColumns } = statement.withParams(params as P)
 
 			try {
 				const stmt = this.prepareStatement(sql)
-				// Since sqlite doesn't auto-parse JSON, we need to handle FromJson results
-				const results = stmt.all(...values) as R
-				if (Array.isArray(results)) {
-					// For array results, parse any FromJson fields
-					return results.map((row) => {
-						if (typeof row === "object" && row !== null) {
-							return Object.fromEntries(
-								Object.entries(row).map(([key, value]) => {
-									// If the field ends with fromJson, parse it
-									if (key.endsWith("fromJson") && typeof value === "string") {
-										try {
-											return [key.replace(/fromJson$/, ""), JSON.parse(value)]
-										} catch {
-											return [key.replace(/fromJson$/, ""), value]
-										}
-									}
-									return [key, value]
-								})
-							)
-						}
-						return row
-					}) as R
-				}
-				return results
+
+				const rawResults = processQueryResults(stmt, values, jsonColumns)
+
+				return rawResults as R
 			} catch (error) {
 				throw new NodeSqliteError(
 					"ERR_SQLITE_QUERY",
@@ -203,28 +182,18 @@ export class DB {
 			const sqlFn: SqlFn<P> = (strings, ...params) =>
 				new Sql<P>(strings, params)
 			const statement = builder({ sql: sqlFn })
-			const { sql, values } = statement.withParams(params as P)
+			const { sql, values, jsonColumns } = statement.withParams(
+				params as P,
+				true
+			)
+
 			this.#logger.debug("Executing mutation", { sql })
 			try {
 				const stmt = this.prepareStatement(sql)
-				const result = stmt.run(...values)
 
-				// Only try to get rows if there's a RETURNING clause
-				if (sql.toUpperCase().includes("RETURNING")) {
-					const rows = stmt.all()
-					if (rows.length > 0) {
-						return rows as R
-					}
-				}
+				const results = processQueryResults(stmt, values, jsonColumns)
 
-				this.#logger.debug("Mutation completed", {
-					changes: result.changes,
-					lastInsertRowid: result.lastInsertRowid,
-				})
-				return {
-					changes: result.changes,
-					lastInsertRowid: result.lastInsertRowid,
-				} as R
+				return results as R
 			} catch (error) {
 				this.#logger.error("Mutation failed", { sql, error })
 				if (isNodeSqliteError(error)) {

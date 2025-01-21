@@ -41,8 +41,7 @@
     "type-fest": "^4.33.0"
   },
   "dependencies": {
-    "fast-safe-stringify": "^2.1.1",
-    "msgpack-lite": "^0.1.26"
+    "fast-safe-stringify": "^2.1.1"
   },
   "engines": {
     "node": ">=v23.4.0"

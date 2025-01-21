@@ -82,6 +82,20 @@ test("executes basic SELECT query", () => {
 	assert.equal(results[0].age, 30)
 })
 
+test("handles syntax errors", () => {
+	const query = db.query<Record<string, never>>(
+		({ sql }) => sql`SELEC * FORM users`
+	)
+
+	assert.throws(
+		() => query.all({}), // Execute the query to trigger the error
+		(error) =>
+			error instanceof NodeSqliteError &&
+			NodeSqliteError.fromNodeSqlite(error).getPrimaryResultCode() ===
+				SqlitePrimaryResultCode.SQLITE_ERROR
+	)
+})
+
 test("handles complex WHERE conditions", () => {
 	const insertUser = db.mutation<{ name: string; age: number; email: string }>(
 		({ sql }) => sql`
@@ -359,17 +373,4 @@ test("clears statement cache", () => {
 	assert.equal(stats.size, 0)
 
 	dbWithCache.close()
-})
-
-test("handles syntax errors", () => {
-	const query = db.query<Record<string, never>>(
-		({ sql }) => sql`SELEC * FORM users`
-	)
-
-	assert.throws(
-		() => query.all({}), // Execute the query to trigger the error
-		(error) =>
-			error instanceof NodeSqliteError &&
-			error.getPrimaryResultCode() === SqlitePrimaryResultCode.SQLITE_ERROR
-	)
 })

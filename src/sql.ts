@@ -68,7 +68,8 @@ export class Sql<P extends { [key: string]: unknown }> {
 	readonly #strings: readonly string[]
 	readonly #paramOperators: ReadonlyArray<ParamValue<P>>
 	readonly #defaultParams: PartialDeep<P>
-	readonly #jsonColumns = new Set<string>()
+
+	#hasJsonColumns = false
 
 	constructor(
 		strings: readonly string[],
@@ -94,33 +95,15 @@ export class Sql<P extends { [key: string]: unknown }> {
 		return match[1] as keyof P
 	}
 
-	#isToJson(op: ParamValue<P>): boolean {
-		if (op.endsWith(".toJson")) {
-			const columnName = op.split(".")[0].substring(1)
-			this.#jsonColumns.add(columnName)
-			return true
-		}
-		return false
-	}
-
-	#isFromJson(op: ParamValue<P>): boolean {
-		if (op.endsWith(".fromJson")) {
-			const columnName = op.split(".")[0].substring(1)
-			this.#jsonColumns.add(columnName)
-			return true
-		}
-		return false
-	}
-
 	get sql(): string {
 		let result = this.#strings[0]
 
 		for (let i = 0; i < this.#paramOperators.length; i++) {
 			const op = this.#paramOperators[i]
 
-			if (this.#isToJson(op)) {
-				result += `json(?) ${this.#strings[i + 1]}`
-			} else if (this.#isFromJson(op)) {
+			if (op.endsWith(".toJson")) {
+				result += `jsonb(?) ${this.#strings[i + 1]}`
+			} else if (op.endsWith(".fromJson")) {
 				const columnName = op.split(".")[0].substring(1)
 				result += `json_extract(${columnName}, '$') ${this.#strings[i + 1]}`
 			} else {
@@ -129,18 +112,29 @@ export class Sql<P extends { [key: string]: unknown }> {
 		}
 		return result
 	}
+
+	get hasJsonColumns(): boolean {
+		return (
+			this.sql.includes("json_extract") ||
+			this.sql.includes("json(") ||
+			this.sql.includes("jsonb(") ||
+			this.#hasJsonColumns
+		)
+	}
+
 	withParams(
 		params: P,
 		isMutation = false
 	): {
 		sql: string
 		values: SupportedValueType[]
-		jsonColumns: string[]
+		hasJsonColumns: boolean
 	} {
 		const values = this.#paramOperators
 			.map((op) => {
 				// For fromJson operations in queries, we don't need any values at all
-				if (this.#isFromJson(op) && !isMutation) {
+				if (op.endsWith(".fromJson") && !isMutation) {
+					this.#hasJsonColumns = true
 					return null
 				}
 
@@ -161,7 +155,8 @@ export class Sql<P extends { [key: string]: unknown }> {
 					)
 				}
 
-				if (this.#isToJson(op)) {
+				if (op.endsWith(".toJson")) {
+					this.#hasJsonColumns = true
 					return stringify(value)
 				}
 
@@ -169,12 +164,10 @@ export class Sql<P extends { [key: string]: unknown }> {
 			})
 			.filter((value): value is NonNullable<typeof value> => value !== null)
 
-		const jsonColumns = Array.from(this.#jsonColumns)
-
 		return {
 			sql: this.sql,
 			values,
-			jsonColumns,
+			hasJsonColumns: this.hasJsonColumns,
 		}
 	}
 }
@@ -194,47 +187,36 @@ export interface XStatementSync<
 	sourceSQL: string
 }
 
+function looksLikeJSON(str: string): boolean {
+	const data = str.trim()
+	return (
+		// Only objects and arrays
+		(data.startsWith("{") && data.endsWith("}")) ||
+		(data.startsWith("[") && data.endsWith("]"))
+	)
+}
+
 /**
  * Helper function to parse JSON columns in result rows
  */
 export function parseJsonColumns(
-	row: Record<string, unknown>,
-	jsonColumns: string[]
+	row: Record<string, unknown>
 ): Record<string, unknown> {
-	if (!row) {
-		return row
-	}
-
 	const result = { ...row }
 
-	// First try to parse any columns we explicitly know are JSON
-	if (jsonColumns.length) {
-		for (const col of jsonColumns) {
-			const value = result[col]
-			if (typeof value === "string") {
-				try {
-					result[col] = JSON.parse(value)
-				} catch {
-					// Keep original value if parsing fails
+	// Handle every field in the row that's a string and try to parse it
+	for (const [key, value] of Object.entries(result)) {
+		if (typeof value === "string") {
+			try {
+				if (looksLikeJSON(value)) {
+					const data = JSON.parse(value)
+					result[key] = data
 				}
-			}
-		}
-	} else {
-		// If no explicit JSON columns were specified, try to parse all string values that look like JSON
-		for (const [key, value] of Object.entries(result)) {
-			if (
-				typeof value === "string" &&
-				(value.startsWith("{") || value.startsWith("["))
-			) {
-				try {
-					result[key] = JSON.parse(value)
-				} catch {
-					// Keep original value if parsing fails
-				}
+			} catch {
+				// Keep original value if parsing fails
 			}
 		}
 	}
-
 	return result
 }
 type CreateXStatementSyncProps<
@@ -242,7 +224,7 @@ type CreateXStatementSyncProps<
 > = (params: P) => {
 	stmt: StatementSync
 	values: SupportedValueType[]
-	jsonColumns: string[]
+	hasJsonColumns: boolean
 }
 
 /**
@@ -256,26 +238,27 @@ export function createXStatementSync<
 	return {
 		all<R = RET>(params: P) {
 			try {
-				const { stmt, values, jsonColumns } = props(params)
+				const { stmt, values, hasJsonColumns } = props(params)
 				const results = stmt.all(...values)
 				if (!results || !results.length) {
 					// No results case
 					return (Array.isArray(results) ? [] : undefined) as R
 				}
 
+				if (!hasJsonColumns) {
+					return results as R
+				}
+
 				if (Array.isArray(results)) {
 					// Array results case
 					return results.map((row) =>
-						parseJsonColumns(row as Record<string, unknown>, jsonColumns)
+						parseJsonColumns(row as Record<string, unknown>)
 					) as R
 				}
 
 				if (typeof results === "object") {
 					// Single object result case
-					return parseJsonColumns(
-						results as Record<string, unknown>,
-						jsonColumns
-					) as R
+					return parseJsonColumns(results as Record<string, unknown>) as R
 				}
 
 				// Primitive value case
@@ -293,11 +276,18 @@ export function createXStatementSync<
 
 		get<R = RET>(params: P) {
 			try {
-				const { stmt, values, jsonColumns } = props(params)
+				const { stmt, values, hasJsonColumns } = props(params)
 				const row = stmt.get(...values)
-				return row
-					? (parseJsonColumns(row as Record<string, unknown>, jsonColumns) as R)
-					: undefined
+
+				if (!row) {
+					return undefined
+				}
+
+				if (!hasJsonColumns) {
+					return row as R
+				}
+
+				return parseJsonColumns(row as Record<string, unknown>) as R
 			} catch (error) {
 				throw new NodeSqliteError(
 					"ERR_SQLITE_QUERY",
@@ -326,7 +316,7 @@ export function createXStatementSync<
 
 		iterate<R = RET>(params: P) {
 			try {
-				const { stmt, values, jsonColumns } = props(params)
+				const { stmt, values, hasJsonColumns } = props(params)
 				// @ts-expect-error -- @types/node types are incomplete
 				const baseIterator = stmt.iterate(...values)
 				return {
@@ -337,10 +327,11 @@ export function createXStatementSync<
 						}
 						return {
 							done: false,
-							value: parseJsonColumns(
-								result.value as Record<string, unknown>,
-								jsonColumns
-							) as R,
+							value: hasJsonColumns
+								? (parseJsonColumns(
+										result.value as Record<string, unknown>
+									) as R)
+								: (result.value as R),
 						}
 					},
 				}

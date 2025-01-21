@@ -182,11 +182,14 @@ export class Sql<P extends { [key: string]: unknown }> {
 /**
  * Interface for prepared statements with type safety
  */
-export interface XStatementSync<P extends Record<string, unknown> | undefined> {
-	all<R>(params: P): R[]
+export interface XStatementSync<
+	P extends Record<string, unknown> | undefined,
+	RET = unknown,
+> {
+	all<R = RET>(params: P): R[]
 	expandedSQL: string
-	iterate<R>(params: P): Iterator<R>
-	get<R>(params: P): R | undefined
+	iterate<R = RET>(params: P): Iterator<R>
+	get<R = RET>(params: P): R | undefined
 	run(params: P): StatementResultingChanges
 	sourceSQL: string
 }
@@ -198,25 +201,42 @@ export function parseJsonColumns(
 	row: Record<string, unknown>,
 	jsonColumns: string[]
 ): Record<string, unknown> {
-	if (!row || !jsonColumns.length) {
+	if (!row) {
 		return row
 	}
 
 	const result = { ...row }
 
-	// Handle every field in the row that's a string and try to parse it
-	for (const [key, value] of Object.entries(result)) {
-		if (typeof value === "string") {
-			try {
-				result[key] = JSON.parse(value)
-			} catch {
-				// Keep original value if parsing fails
+	// First try to parse any columns we explicitly know are JSON
+	if (jsonColumns.length) {
+		for (const col of jsonColumns) {
+			const value = result[col]
+			if (typeof value === "string") {
+				try {
+					result[col] = JSON.parse(value)
+				} catch {
+					// Keep original value if parsing fails
+				}
+			}
+		}
+	} else {
+		// If no explicit JSON columns were specified, try to parse all string values that look like JSON
+		for (const [key, value] of Object.entries(result)) {
+			if (
+				typeof value === "string" &&
+				(value.startsWith("{") || value.startsWith("["))
+			) {
+				try {
+					result[key] = JSON.parse(value)
+				} catch {
+					// Keep original value if parsing fails
+				}
 			}
 		}
 	}
+
 	return result
 }
-
 type CreateXStatementSyncProps<
 	P extends { [key: string]: unknown } | undefined,
 > = (params: P) => {
@@ -224,22 +244,42 @@ type CreateXStatementSyncProps<
 	values: SupportedValueType[]
 	jsonColumns: string[]
 }
+
 /**
  * Creates a type-safe prepared statement
  */
 // Update the factory function
 export function createXStatementSync<
 	P extends Record<string, unknown> | undefined,
->(props: CreateXStatementSyncProps<P>): XStatementSync<P> {
+	RET = unknown,
+>(props: CreateXStatementSyncProps<P>): XStatementSync<P, RET> {
 	return {
-		all<R>(params: P) {
+		all<R = RET>(params: P) {
 			try {
 				const { stmt, values, jsonColumns } = props(params)
-				return stmt
-					.all(...values)
-					.map((row) =>
+				const results = stmt.all(...values)
+				if (!results || !results.length) {
+					// No results case
+					return (Array.isArray(results) ? [] : undefined) as R
+				}
+
+				if (Array.isArray(results)) {
+					// Array results case
+					return results.map((row) =>
 						parseJsonColumns(row as Record<string, unknown>, jsonColumns)
-					) as R[]
+					) as R
+				}
+
+				if (typeof results === "object") {
+					// Single object result case
+					return parseJsonColumns(
+						results as Record<string, unknown>,
+						jsonColumns
+					) as R
+				}
+
+				// Primitive value case
+				return results as R
 			} catch (error) {
 				throw new NodeSqliteError(
 					"ERR_SQLITE_QUERY",
@@ -251,7 +291,7 @@ export function createXStatementSync<
 			}
 		},
 
-		get<R>(params: P) {
+		get<R = RET>(params: P) {
 			try {
 				const { stmt, values, jsonColumns } = props(params)
 				const row = stmt.get(...values)
@@ -284,7 +324,7 @@ export function createXStatementSync<
 			}
 		},
 
-		iterate<R>(params: P) {
+		iterate<R = RET>(params: P) {
 			try {
 				const { stmt, values, jsonColumns } = props(params)
 				// @ts-expect-error -- @types/node types are incomplete

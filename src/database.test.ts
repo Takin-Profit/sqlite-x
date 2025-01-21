@@ -55,10 +55,17 @@ test("executes basic SELECT query", () => {
         `
 	)
 
-	insertUser({ name: "John", age: 30, email: "john@example.com" })
-	insertUser({ name: "Jane", age: 25, email: "jane@example.com" })
+	insertUser.run({ name: "John", age: 30, email: "john@example.com" })
+	insertUser.run({ name: "Jane", age: 25, email: "jane@example.com" })
 
-	const getUsers = db.query<{ minAge: number }>(
+	const users = db.query<
+		{ minAge: number },
+		{
+			name: string
+			age: number
+			email: string
+		}
+	>(
 		({ sql }) => sql`
             SELECT name, age, email
             FROM users
@@ -66,11 +73,9 @@ test("executes basic SELECT query", () => {
         `
 	)
 
-	const results = getUsers<Array<{ name: string; age: number; email: string }>>(
-		{
-			minAge: 28,
-		}
-	)
+	const results = users.all({
+		minAge: 28,
+	})
 
 	assert.equal(results.length, 1)
 	assert.equal(results[0].name, "John")
@@ -85,11 +90,11 @@ test("handles complex WHERE conditions", () => {
         `
 	)
 
-	insertUser({ name: "John", age: 30, email: "john@example.com" })
-	insertUser({ name: "Jane", age: 25, email: "jane@example.com" })
-	insertUser({ name: "Bob", age: 35, email: "bob@example.com" })
+	insertUser.run({ name: "John", age: 30, email: "john@example.com" })
+	insertUser.run({ name: "Jane", age: 25, email: "jane@example.com" })
+	insertUser.run({ name: "Bob", age: 35, email: "bob@example.com" })
 
-	const getUsers = db.query<{ minAge: number; nameLike: string }>(
+	const getUsersQuery = db.query<{ minAge: number; nameLike: string }>(
 		({ sql }) => sql`
             SELECT * FROM users
             WHERE age >= ${"@minAge"}
@@ -97,7 +102,7 @@ test("handles complex WHERE conditions", () => {
         `
 	)
 
-	const results = getUsers<Array<{ name: string; age: number }>>({
+	const results = getUsersQuery.all<{ name: string; age: number }>({
 		minAge: 25,
 		nameLike: "J%",
 	})
@@ -114,7 +119,7 @@ test("performs INSERT operation", () => {
         `
 	)
 
-	const result = insertUser({
+	const result = insertUser.run({
 		name: "John",
 		age: 30,
 		email: "john@example.com",
@@ -132,7 +137,7 @@ test("performs UPDATE operation", () => {
         `
 	)
 
-	const inserted = insertUser({
+	const inserted = insertUser.run({
 		name: "John",
 		age: 30,
 		email: "john@example.com",
@@ -146,7 +151,7 @@ test("performs UPDATE operation", () => {
         `
 	)
 
-	const result = updateUser({
+	const result = updateUser.run({
 		id: inserted.lastInsertRowid,
 		newAge: 31,
 	})
@@ -162,7 +167,7 @@ test("performs DELETE operation", () => {
         `
 	)
 
-	const inserted = insertUser({
+	const inserted = insertUser.run({
 		name: "John",
 		age: 30,
 		email: "john@example.com",
@@ -175,7 +180,7 @@ test("performs DELETE operation", () => {
         `
 	)
 
-	const result = deleteUser({ id: inserted.lastInsertRowid })
+	const result = deleteUser.run({ id: inserted.lastInsertRowid })
 	assert.equal(result.changes, 1)
 })
 
@@ -187,7 +192,7 @@ test("handles unique constraint violations", () => {
         `
 	)
 
-	insertUser({
+	insertUser.run({
 		name: "John",
 		age: 30,
 		email: "john@example.com",
@@ -195,7 +200,7 @@ test("handles unique constraint violations", () => {
 
 	assert.throws(
 		() =>
-			insertUser({
+			insertUser.run({
 				name: "Jane",
 				age: 25,
 				email: "john@example.com",
@@ -216,7 +221,7 @@ test("handles foreign key constraints", () => {
 
 	assert.throws(
 		() =>
-			insertPost({
+			insertPost.run({
 				title: "Test Post",
 				userId: 999,
 			}),
@@ -239,7 +244,7 @@ test("enforces NOT NULL constraints", () => {
 
 	assert.throws(
 		() =>
-			insertUser({
+			insertUser.run({
 				name: null,
 				age: 30,
 			}),
@@ -265,7 +270,7 @@ test("creates and restores from backup", () => {
         `
 	)
 
-	insertUser({
+	insertUser.run({
 		name: "John",
 		age: 30,
 		email: "john@example.com",
@@ -283,7 +288,7 @@ test("creates and restores from backup", () => {
 		({ sql }) => sql`SELECT * FROM users`
 	)
 
-	const results = getUsers<Array<{ name: string; age: number }>>({})
+	const results = getUsers.all<{ name: string; age: number }>({})
 	assert.equal(results.length, 1)
 	assert.equal(results[0].name, "John")
 	assert.equal(results[0].age, 30)
@@ -331,9 +336,9 @@ test("caches prepared statements", () => {
         );
     `)
 
-	query<unknown[]>({ minAge: 20 })
-	query<unknown[]>({ minAge: 25 })
-	query<unknown[]>({ minAge: 30 })
+	query.all<unknown[]>({ minAge: 20 })
+	query.all<unknown[]>({ minAge: 25 })
+	query.all<unknown[]>({ minAge: 30 })
 
 	const stats = dbWithCache.getCacheStats()
 	assert.ok(stats)
@@ -362,7 +367,7 @@ test("handles syntax errors", () => {
 	)
 
 	assert.throws(
-		() => query({}), // Execute the query to trigger the error
+		() => query.all({}), // Execute the query to trigger the error
 		(error) =>
 			error instanceof NodeSqliteError &&
 			error.getPrimaryResultCode() === SqlitePrimaryResultCode.SQLITE_ERROR

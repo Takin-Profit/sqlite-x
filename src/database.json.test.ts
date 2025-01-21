@@ -46,7 +46,7 @@ test("handles simple object JSON storage and retrieval", () => {
     `
 	)
 
-	insertData({ data: simpleObject })
+	insertData.run({ data: simpleObject })
 
 	const getData = db.query<Record<string, never>>(
 		({ sql }) => sql`
@@ -55,7 +55,7 @@ test("handles simple object JSON storage and retrieval", () => {
     `
 	)
 
-	const result = getData<Array<{ data: SimpleObject }>>({})
+	const result = getData.all<{ data: SimpleObject }>({})
 	assert.deepEqual(result[0].data, simpleObject)
 })
 
@@ -107,7 +107,7 @@ test("handles nested object JSON storage and retrieval", () => {
     `
 	)
 
-	insertData({ data: nestedObject })
+	insertData.run({ data: nestedObject })
 
 	const getData = db.query<Record<string, never>>(
 		({ sql }) => sql`
@@ -116,7 +116,7 @@ test("handles nested object JSON storage and retrieval", () => {
     `
 	)
 
-	const result = getData<Array<{ data: NestedObject }>>({})
+	const result = getData.all<{ data: NestedObject }>({})
 	assert.deepEqual(result[0].data, nestedObject)
 })
 
@@ -147,7 +147,7 @@ test("handles multiple row JSON operations", () => {
 	)
 
 	for (const row of rows) {
-		insertRows({ data: row })
+		insertRows.run({ data: row })
 	}
 
 	const getRows = db.query<Record<string, never>>(
@@ -161,9 +161,9 @@ test("handles multiple row JSON operations", () => {
   `
 	)
 
-	const result = getRows<
-		Array<{ id: number; data: RowData; created_at: string }>
-	>({})
+	const result = getRows.all<{ id: number; data: RowData; created_at: string }>(
+		{}
+	)
 	assert.equal(result.length, 2)
 	assert.deepEqual(result[0].data, rows[0])
 	assert.deepEqual(result[1].data, rows[1])
@@ -206,7 +206,7 @@ test("handles JSON path queries", () => {
     `
 	)
 
-	insertData({ data })
+	insertData.all({ data })
 
 	const getData = db.query<Record<string, never>>(
 		({ sql }) => sql`
@@ -220,19 +220,17 @@ test("handles JSON path queries", () => {
     `
 	)
 
-	const result = getData<
-		Array<{
-			data: TestData
-			first_user_name: string
-			version: string
-			second_user_theme: string
-			feature_flag: number
-		}>
-	>({})
+	const result = getData.all<{
+		data: TestData
+		first_user_name: string
+		version: string
+		second_user_theme: string
+		feature_flag: number
+	}>({})
 
 	assert.deepEqual(result[0].data, data)
 	assert.strictEqual(result[0].first_user_name, "John")
-	assert.strictEqual(result[0].version, 1)
+	assert.strictEqual(result[0].version, "1.0")
 	assert.strictEqual(result[0].second_user_theme, "light")
 	assert.strictEqual(result[0].feature_flag, 1)
 })
@@ -283,7 +281,7 @@ test("handles array of objects with mixed types", () => {
     `
 	)
 
-	insertData({ data: testData })
+	insertData.run({ data: testData })
 
 	const getData = db.query<Record<string, never>>(
 		({ sql }) => sql`
@@ -296,14 +294,12 @@ test("handles array of objects with mixed types", () => {
     `
 	)
 
-	const result = getData<
-		Array<{
-			full_data: ComplexArray
-			first_tag: string
-			view_count: number
-			is_active: number
-		}>
-	>({})
+	const result = getData.all<{
+		full_data: ComplexArray
+		first_tag: string
+		view_count: number
+		is_active: number
+	}>({})
 
 	assert.deepEqual(result[0].full_data, testData)
 	assert.strictEqual(result[0].first_tag, "important")
@@ -334,7 +330,7 @@ test("handles null and empty JSON values", () => {
     `
 	)
 
-	insertData({ data: testData })
+	insertData.run({ data: testData })
 
 	const getData = db.query<Record<string, never>>(
 		({ sql }) => sql`
@@ -348,15 +344,13 @@ test("handles null and empty JSON values", () => {
     `
 	)
 
-	const result = getData<
-		Array<{
-			data: NullableData
-			missing_value: unknown
-			null_value: null
-			empty_object: Record<string, never>
-			empty_array: never[]
-		}>
-	>({})
+	const result = getData.all<{
+		data: NullableData
+		missing_value: unknown
+		null_value: null
+		empty_object: Record<string, never>
+		empty_array: never[]
+	}>({})
 
 	assert.deepEqual(result[0].data, testData)
 	assert.strictEqual(result[0].missing_value, null)
@@ -392,7 +386,7 @@ test("handles JSON updates", () => {
     `
 	)
 
-	insertData({ data: initialData })
+	insertData.run({ data: initialData })
 
 	// Update the JSON data
 	const updatedData: UpdateData = {
@@ -411,7 +405,7 @@ test("handles JSON updates", () => {
     `
 	)
 
-	updateData({ data: updatedData })
+	updateData.run({ data: updatedData })
 
 	// Verify the update
 	const getData = db.query<Record<string, never>>(
@@ -421,7 +415,7 @@ test("handles JSON updates", () => {
     `
 	)
 
-	const result = getData<Array<{ data: UpdateData }>>({})
+	const result = getData.all<{ data: UpdateData }>({})
 	assert.deepEqual(result[0].data, updatedData)
 })
 
@@ -455,7 +449,7 @@ test("handles nested JSON array operations", () => {
     `
 	)
 
-	insertData({ data: testData })
+	insertData.run({ data: testData })
 
 	const getData = db.query<Record<string, never>>(
 		({ sql }) => sql`
@@ -467,13 +461,11 @@ test("handles nested JSON array operations", () => {
     `
 	)
 
-	const result = getData<
-		Array<{
-			data: NestedArrayData
-			center_value: number
-			nested_value: string
-		}>
-	>({})
+	const result = getData.all<{
+		data: NestedArrayData
+		center_value: number
+		nested_value: string
+	}>({})
 
 	assert.deepEqual(result[0].data, testData)
 	assert.strictEqual(result[0].center_value, 5)
@@ -505,7 +497,7 @@ test("handles fromJson when querying stored JSON data", () => {
   `
 	)
 
-	insertUser({ user_data: userData })
+	insertUser.run({ user_data: userData })
 
 	// Now query it back using fromJson
 	const getUser = db.query<Record<string, never>>(
@@ -516,7 +508,7 @@ test("handles fromJson when querying stored JSON data", () => {
 	)
 
 	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-	const result = getUser<any>({})
+	const result = getUser.all<any>({})
 	assert.deepEqual(result[0].user_data, userData)
 })
 
@@ -559,7 +551,7 @@ test("handles fromJson with nested JSON fields", () => {
   `
 	)
 
-	insertData({ data: testData })
+	insertData.run({ data: testData })
 
 	// Query specific nested fields using fromJson
 	const getData = db.query<Record<string, never>>(
@@ -572,7 +564,7 @@ test("handles fromJson with nested JSON fields", () => {
 `
 	)
 	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-	const result = getData<any>({})
+	const result = getData.all<any>({})
 	assert.deepEqual(result[0].full_data, testData)
 	assert.deepEqual(result[0].tags, ["test", "json"])
 	assert.deepEqual(result[0].flags, {
@@ -610,7 +602,7 @@ test("handles mixed query with multiple fromJson operations", () => {
   `
 	)
 
-	insertData({ profile, meta: metadata })
+	insertData.run({ profile, meta: metadata })
 
 	// Query both JSON fields using fromJson
 	const getData = db.query<Record<string, never>>(
@@ -623,7 +615,7 @@ test("handles mixed query with multiple fromJson operations", () => {
 	)
 
 	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-	const result = getData<any>({})
+	const result = getData.all<any>({})
 	assert.deepEqual(result[0].profile, profile)
 	assert.deepEqual(result[0].metadata, metadata)
 })

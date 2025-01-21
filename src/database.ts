@@ -3,7 +3,6 @@
 // license that can be found in the LICENSE file.
 
 import { DatabaseSync, type StatementSync } from "node:sqlite"
-import type { PartialDeep } from "type-fest"
 import {
 	NodeSqliteError,
 	SqlitePrimaryResultCode,
@@ -136,10 +135,10 @@ export class DB {
 		}
 	}
 
-	query<P extends { [key: string]: unknown }>(
+	query<P extends { [key: string]: unknown }, R = unknown>(
 		builder: (ctx: { sql: SqlFn<P> }) => Sql<P>
-	): XStatementSync<P> {
-		return createXStatementSync<P>((params) => {
+	): XStatementSync<P, R> {
+		return createXStatementSync<P, R>((params) => {
 			const { sql, values, jsonColumns } = builder({
 				sql: (strings, ...params) => {
 					return new Sql<P>(strings, params)
@@ -151,10 +150,10 @@ export class DB {
 		})
 	}
 
-	mutation<P extends { [key: string]: unknown }>(
+	mutation<P extends { [key: string]: unknown }, R = unknown>(
 		builder: (ctx: { sql: SqlFn<P> }) => Sql<P>
-	): XStatementSync<P> {
-		return createXStatementSync<P>((params) => {
+	): XStatementSync<P, R> {
+		return createXStatementSync<P, R>((params) => {
 			const { sql, values, jsonColumns } = builder({
 				sql: (strings, ...params) => {
 					return new Sql<P>(strings, params)

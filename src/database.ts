@@ -24,11 +24,12 @@ import {
 import { tmpdir } from "node:os"
 import { accessSync, renameSync, unlinkSync } from "node:fs"
 import { type Logger, NoopLogger } from "#logger"
-import { processQueryResults, Sql, type SqlFn } from "#sql"
-
-type QueryFunction<P extends { [key: string]: unknown }> = <R>(
-	params: PartialDeep<P>
-) => R
+import {
+	createPreparedStatement,
+	type PreparedStatement,
+	Sql,
+	type SqlFn,
+} from "#sql"
 
 export type MutationResult = {
 	changes: number | bigint
@@ -148,21 +149,18 @@ export class DB {
 
 	query<P extends { [key: string]: unknown }>(
 		builder: (ctx: { sql: SqlFn<P> }) => Sql<P>
-	): QueryFunction<P> {
+	): <R>(params: PartialDeep<P>) => PreparedStatement<R> {
 		const sqlFn: SqlFn<P> = (strings, ...params) => {
 			return new Sql<P>(strings, params)
 		}
 
-		return <R>(params: PartialDeep<P>): R => {
+		return <R>(params: PartialDeep<P>): PreparedStatement<R> => {
 			const statement = builder({ sql: sqlFn })
 			const { sql, values, jsonColumns } = statement.withParams(params as P)
 
 			try {
 				const stmt = this.prepareStatement(sql)
-
-				const rawResults = processQueryResults(stmt, values, jsonColumns)
-
-				return rawResults as R
+				return createPreparedStatement<R>(stmt, values, jsonColumns)
 			} catch (error) {
 				throw new NodeSqliteError(
 					"ERR_SQLITE_QUERY",
@@ -177,8 +175,10 @@ export class DB {
 
 	mutation<P extends { [key: string]: unknown }>(
 		builder: (ctx: { sql: SqlFn<P> }) => Sql<P>
-	): MutationFunction<P> {
-		return <R = MutationResult>(params: PartialDeep<P>): R => {
+	): <R = MutationResult>(params: PartialDeep<P>) => PreparedStatement<R> {
+		return <R = MutationResult>(
+			params: PartialDeep<P>
+		): PreparedStatement<R> => {
 			const sqlFn: SqlFn<P> = (strings, ...params) =>
 				new Sql<P>(strings, params)
 			const statement = builder({ sql: sqlFn })
@@ -190,10 +190,7 @@ export class DB {
 			this.#logger.debug("Executing mutation", { sql })
 			try {
 				const stmt = this.prepareStatement(sql)
-
-				const results = processQueryResults(stmt, values, jsonColumns)
-
-				return results as R
+				return createPreparedStatement<R>(stmt, values, jsonColumns)
 			} catch (error) {
 				this.#logger.error("Mutation failed", { sql, error })
 				if (isNodeSqliteError(error)) {

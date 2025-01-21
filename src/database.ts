@@ -31,7 +31,7 @@ import {
 } from "#sql"
 
 export interface DBOptions {
-	location?: string
+	location?: string | ":memory:"
 	statementCache?: boolean | StatementCacheOptions
 	pragma?: PragmaConfig
 	environment?: "development" | "testing" | "production"

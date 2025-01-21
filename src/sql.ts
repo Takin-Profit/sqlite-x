@@ -187,8 +187,11 @@ export interface XStatementSync<
 	sourceSQL: string
 }
 
-function looksLikeJSON(str: string): boolean {
-	const data = str.trim()
+function looksLikeJSON(value: unknown): value is string {
+	if (typeof value !== "string") {
+		return false
+	}
+	const data = value.trim()
 	return (
 		// Only objects and arrays
 		(data.startsWith("{") && data.endsWith("}")) ||
@@ -206,12 +209,9 @@ export function parseJsonColumns(
 
 	// Handle every field in the row that's a string and try to parse it
 	for (const [key, value] of Object.entries(result)) {
-		if (typeof value === "string") {
+		if (looksLikeJSON(value)) {
 			try {
-				if (looksLikeJSON(value)) {
-					const data = JSON.parse(value)
-					result[key] = data
-				}
+				result[key] = JSON.parse(value)
 			} catch {
 				// Keep original value if parsing fails
 			}

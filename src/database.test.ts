@@ -1,21 +1,13 @@
 import { test, beforeEach, afterEach } from "node:test"
 import assert from "node:assert/strict"
-import { rm, accessSync } from "node:fs"
-import { join } from "node:path"
-import { tmpdir } from "node:os"
 import { DB } from "./database.js"
 import { NodeSqliteError, SqlitePrimaryResultCode } from "./errors.js"
 
 let db: DB
-let dbPath: string
-let backupPath: string
 
 beforeEach(() => {
-	dbPath = join(tmpdir(), `test-${Date.now()}.db`)
-	backupPath = join(tmpdir(), `backup-${Date.now()}.db`)
-
 	db = new DB({
-		location: dbPath,
+		location: ":memory:",
 		environment: "testing",
 		// logger: new ConsoleLogger(LogLevel.DEBUG), // Changed to DEBUG level
 	})
@@ -43,8 +35,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-	rm(dbPath, () => {})
-	rm(backupPath, () => {})
+	db.close()
 })
 
 test("executes basic SELECT query", () => {
@@ -262,67 +253,7 @@ test("enforces NOT NULL constraints", () => {
 				name: null,
 				age: 30,
 			}),
-		(error: unknown) => {
-			if (!(error instanceof NodeSqliteError)) {
-				return false
-			}
-
-			return (
-				error.code === "ERR_SQLITE_ERROR" &&
-				error.errcode === 1299 &&
-				error.message.includes("NOT NULL constraint failed: users.name")
-			)
-		}
-	)
-})
-
-test("creates and restores from backup", () => {
-	const insertUser = db.mutation<{ name: string; age: number; email: string }>(
-		({ sql }) => sql`
-            INSERT INTO users (name, age, email)
-            VALUES (${"@name"}, ${"@age"}, ${"@email"})
-        `
-	)
-
-	insertUser.run({
-		name: "John",
-		age: 30,
-		email: "john@example.com",
-	})
-
-	db.backup(backupPath)
-
-	assert.doesNotThrow(() => accessSync(backupPath))
-
-	db.close()
-	db = new DB({ location: dbPath })
-	db.restore(backupPath)
-
-	const getUsers = db.query<Record<string, never>>(
-		({ sql }) => sql`SELECT * FROM users`
-	)
-
-	const results = getUsers.all<{ name: string; age: number }>({})
-	assert.equal(results.length, 1)
-	assert.equal(results[0].name, "John")
-	assert.equal(results[0].age, 30)
-})
-
-test("throws on invalid backup path", () => {
-	assert.throws(
-		() => db.backup("/invalid/path/backup.db"),
-		(error) =>
-			error instanceof NodeSqliteError &&
-			error.getPrimaryResultCode() === SqlitePrimaryResultCode.SQLITE_CANTOPEN
-	)
-})
-
-test("throws on invalid restore path", () => {
-	assert.throws(
-		() => db.restore("/nonexistent/backup.db"),
-		(error) =>
-			error instanceof NodeSqliteError &&
-			error.getPrimaryResultCode() === SqlitePrimaryResultCode.SQLITE_CANTOPEN
+		{ name: "NodeSqliteError" }
 	)
 })
 

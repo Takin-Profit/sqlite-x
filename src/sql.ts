@@ -75,14 +75,12 @@ export class Sql<P extends { [key: string]: unknown }> {
 		paramOperators: ReadonlyArray<ParamValue<P>>,
 		defaultParams: Partial<P> = {} as Partial<P>
 	) {
-		console.log("[SQL Constructor] Creating new SQL instance")
 		this.#strings = strings
 		this.#paramOperators = paramOperators
 		this.#defaultParams = defaultParams
 	}
 
 	#extractParamName(op: ParamValue<P>): keyof P {
-		console.log("[extractParamName] Processing operator:", op)
 		const match = op.match(/^@([^.]+)/)
 		if (!match) {
 			throw new NodeSqliteError(
@@ -93,7 +91,6 @@ export class Sql<P extends { [key: string]: unknown }> {
 				undefined
 			)
 		}
-		console.log("[extractParamName] Extracted name:", match[1])
 		return match[1] as keyof P
 	}
 
@@ -108,7 +105,6 @@ export class Sql<P extends { [key: string]: unknown }> {
 
 	#isFromJson(op: ParamValue<P>): boolean {
 		if (op.endsWith(".fromJson")) {
-			console.log("[isFromJson] Found fromJson operator")
 			const columnName = op.split(".")[0].substring(1)
 			this.#jsonColumns.add(columnName)
 			return true
@@ -118,27 +114,19 @@ export class Sql<P extends { [key: string]: unknown }> {
 
 	get sql(): string {
 		let result = this.#strings[0]
-		console.log("[sql] Initial SQL:", result)
 
 		for (let i = 0; i < this.#paramOperators.length; i++) {
 			const op = this.#paramOperators[i]
-			console.log("[sql] Processing operator:", op)
 
 			if (this.#isToJson(op)) {
-				console.log("[sql] Adding toJson operation")
 				result += `json(?) ${this.#strings[i + 1]}`
 			} else if (this.#isFromJson(op)) {
-				console.log("[sql] Adding fromJson operation")
 				const columnName = op.split(".")[0].substring(1)
 				result += `json_extract(${columnName}, '$') ${this.#strings[i + 1]}`
 			} else {
-				console.log("[sql] Adding regular parameter")
 				result += `? ${this.#strings[i + 1]}`
 			}
 		}
-
-		console.log("[sql] Final SQL:", result)
-		console.log("[sql] JSON columns:", Array.from(this.#jsonColumns))
 		return result
 	}
 	withParams(
@@ -149,8 +137,6 @@ export class Sql<P extends { [key: string]: unknown }> {
 		values: SupportedValueType[]
 		jsonColumns: string[]
 	} {
-		console.log("[withParams] Processing parameters:", params)
-
 		const values = this.#paramOperators
 			.map((op) => {
 				// For fromJson operations in queries, we don't need any values at all
@@ -164,8 +150,6 @@ export class Sql<P extends { [key: string]: unknown }> {
 						? params[paramName]
 						: this.#defaultParams[paramName]
 
-				console.log(`[withParams] Processing ${String(paramName)}:`, value)
-
 				// Only mutations need to check for missing parameters
 				if (value === undefined && isMutation) {
 					throw new NodeSqliteError(
@@ -178,8 +162,7 @@ export class Sql<P extends { [key: string]: unknown }> {
 				}
 
 				if (this.#isToJson(op)) {
-					console.log("[withParams] Converting to JSON:", value)
-					return typeof value === "string" ? value : stringify(value)
+					return stringify(value)
 				}
 
 				return toSupportedValue(value)
@@ -187,8 +170,6 @@ export class Sql<P extends { [key: string]: unknown }> {
 			.filter((value): value is NonNullable<typeof value> => value !== null)
 
 		const jsonColumns = Array.from(this.#jsonColumns)
-		console.log("[withParams] Final values:", values)
-		console.log("[withParams] JSON columns:", jsonColumns)
 
 		return {
 			sql: this.sql,
@@ -196,24 +177,6 @@ export class Sql<P extends { [key: string]: unknown }> {
 			jsonColumns,
 		}
 	}
-}
-
-/**
- * Creates a new SQL query with parameter bindings
- */
-export function sql<P extends { [key: string]: unknown }>(
-	strings: TemplateStringsArray,
-	...params: Array<ParamValue<P>>
-): Sql<P> {
-	return new Sql(strings, params)
-}
-
-/**
- * Standard interface for database mutations
- */
-export interface MutationResult {
-	changes: number | bigint
-	lastInsertRowid: number | bigint
 }
 
 /**
@@ -330,33 +293,6 @@ export function createStatementBinder<P extends { [key: string]: unknown }, T>(
 	}
 }
 
-export function processRow(
-	row: Record<string, unknown>
-): Record<string, unknown> {
-	console.log("[processRow] Processing row:", row)
-	const result: Record<string, unknown> = {}
-
-	for (const [key, value] of Object.entries(row)) {
-		console.log(`[processRow] Processing column ${key}:`, value)
-		if (typeof value === "string") {
-			try {
-				const parsed = JSON.parse(value)
-				console.log(`[processRow] Parsed JSON in column ${key}:`, parsed)
-				result[key] = parsed
-			} catch (e) {
-				console.log(`[processRow] Using raw value for column ${key}:`, value)
-				result[key] = value
-			}
-		} else {
-			console.log(`[processRow] Using raw value for column ${key}:`, value)
-			result[key] = value
-		}
-	}
-
-	console.log("[processRow] Final processed row:", result)
-	return result
-}
-
 /**
  * Processes query results from a prepared statement, handling both single and multiple rows
  * and parsing JSON columns as needed.
@@ -375,8 +311,6 @@ export function processQueryResults<R>(
 	// Execute the statement with provided values
 	const results = stmt.all(...values)
 
-	console.log("[processQueryResults] Processing results:", results)
-
 	// No results case
 	if (!results || !results.length) {
 		return (Array.isArray(results) ? [] : undefined) as R
@@ -391,7 +325,6 @@ export function processQueryResults<R>(
 
 	// Single object result case
 	if (typeof results === "object") {
-		console.log("[processQueryResults] Single object result:", results)
 		return parseJsonColumns(
 			results as Record<string, unknown>,
 			jsonColumns

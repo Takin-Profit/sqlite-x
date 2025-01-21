@@ -150,40 +150,20 @@ export class DB {
 		builder: (ctx: { sql: SqlFn<P> }) => Sql<P>
 	): QueryFunction<P> {
 		const sqlFn: SqlFn<P> = (strings, ...params) => {
-			console.log("[Database.query] Creating SQL with strings:", strings)
-			console.log("[Database.query] and params:", params)
 			return new Sql<P>(strings, params)
 		}
 
 		return <R>(params: PartialDeep<P>): R => {
-			console.log("[Database.query] Executing query with params:", params)
 			const statement = builder({ sql: sqlFn })
 			const { sql, values, jsonColumns } = statement.withParams(params as P)
-
-			console.log("[Database.query] Prepared statement:", {
-				sql,
-				values,
-				jsonColumns,
-			})
 
 			try {
 				const stmt = this.prepareStatement(sql)
 
-				// Log the prepared statement details
-				console.log("[Database.query] Statement info:", {
-					expandedSQL: stmt.expandedSQL,
-					sourceSQL: stmt.sourceSQL,
-				})
-
 				const rawResults = processQueryResults(stmt, values, jsonColumns)
-
-				console.log(
-					`[Database.query] Processed results: ${JSON.stringify(rawResults)}`
-				)
 
 				return rawResults as R
 			} catch (error) {
-				console.error("[Database.query] Error executing query:", error)
 				throw new NodeSqliteError(
 					"ERR_SQLITE_QUERY",
 					SqlitePrimaryResultCode.SQLITE_ERROR,
@@ -207,18 +187,11 @@ export class DB {
 				true
 			)
 
-			console.log(
-				`[Database.mutation] Prepared statement: ${sql}, values: ${values}, jsonColumns: ${jsonColumns}`
-			)
 			this.#logger.debug("Executing mutation", { sql })
 			try {
 				const stmt = this.prepareStatement(sql)
 
 				const results = processQueryResults(stmt, values, jsonColumns)
-
-				console.log(
-					`[Database.mutation] Processed results: ${JSON.stringify(results)}`
-				)
 
 				return results as R
 			} catch (error) {

@@ -11,20 +11,19 @@ let dbPath: string
 let backupPath: string
 
 beforeEach(() => {
-	try {
-		dbPath = join(tmpdir(), `test-${Date.now()}.db`)
-		backupPath = join(tmpdir(), `backup-${Date.now()}.db`)
+	dbPath = join(tmpdir(), `test-${Date.now()}.db`)
+	backupPath = join(tmpdir(), `backup-${Date.now()}.db`)
 
-		db = new DB({
-			location: dbPath,
-			environment: "testing",
-			// logger: new ConsoleLogger(LogLevel.DEBUG), // Changed to DEBUG level
-		})
+	db = new DB({
+		location: dbPath,
+		environment: "testing",
+		// logger: new ConsoleLogger(LogLevel.DEBUG), // Changed to DEBUG level
+	})
 
-		db.exec("DROP TABLE IF EXISTS posts;")
-		db.exec("DROP TABLE IF EXISTS users;")
+	db.exec("DROP TABLE IF EXISTS posts;")
+	db.exec("DROP TABLE IF EXISTS users;")
 
-		db.exec(`
+	db.exec(`
       CREATE TABLE users (
         id INTEGER PRIMARY KEY,
         name TEXT NOT NULL,
@@ -33,7 +32,7 @@ beforeEach(() => {
       );
     `)
 
-		db.exec(`
+	db.exec(`
       CREATE TABLE posts (
         id INTEGER PRIMARY KEY,
         title TEXT NOT NULL,
@@ -41,20 +40,11 @@ beforeEach(() => {
         FOREIGN KEY(user_id) REFERENCES users(id)
       );
     `)
-	} catch (error) {
-		console.error(error)
-		process.exit(1)
-	}
 })
 
 afterEach(() => {
-	db.close()
-	try {
-		rm(dbPath, () => {})
-		rm(backupPath, () => {})
-	} catch (err) {
-		console.error(err)
-	}
+	rm(dbPath, () => {})
+	rm(backupPath, () => {})
 })
 
 test("executes basic SELECT query", () => {

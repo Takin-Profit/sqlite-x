@@ -25,22 +25,11 @@ import { tmpdir } from "node:os"
 import { accessSync, renameSync, unlinkSync } from "node:fs"
 import { type Logger, NoopLogger } from "#logger"
 import {
-	createPreparedStatement,
-	type PreparedStatement,
+	createXStatementSync,
+	type XStatementSync,
 	Sql,
 	type SqlFn,
 } from "#sql"
-
-export type MutationResult = {
-	changes: number | bigint
-	lastInsertRowid: number | bigint
-}
-
-export type MutationFunction<P extends { [key: string]: unknown }> = <
-	R = MutationResult,
->(
-	params: PartialDeep<P>
-) => R
 
 export interface DBOptions {
 	location?: string
@@ -149,63 +138,34 @@ export class DB {
 
 	query<P extends { [key: string]: unknown }>(
 		builder: (ctx: { sql: SqlFn<P> }) => Sql<P>
-	): <R>(params: PartialDeep<P>) => PreparedStatement<R> {
-		const sqlFn: SqlFn<P> = (strings, ...params) => {
-			return new Sql<P>(strings, params)
-		}
+	): XStatementSync<P> {
+		return createXStatementSync<P>((params) => {
+			const { sql, values, jsonColumns } = builder({
+				sql: (strings, ...params) => {
+					return new Sql<P>(strings, params)
+				},
+			}).withParams(params)
+			const stmt = this.prepareStatement(sql)
 
-		return <R>(params: PartialDeep<P>): PreparedStatement<R> => {
-			const statement = builder({ sql: sqlFn })
-			const { sql, values, jsonColumns } = statement.withParams(params as P)
-
-			try {
-				const stmt = this.prepareStatement(sql)
-				return createPreparedStatement<R>(stmt, values, jsonColumns)
-			} catch (error) {
-				throw new NodeSqliteError(
-					"ERR_SQLITE_QUERY",
-					SqlitePrimaryResultCode.SQLITE_ERROR,
-					"Query execution failed",
-					error instanceof Error ? error.message : String(error),
-					error instanceof Error ? error : undefined
-				)
-			}
-		}
+			return { stmt, values, jsonColumns }
+		})
 	}
 
 	mutation<P extends { [key: string]: unknown }>(
 		builder: (ctx: { sql: SqlFn<P> }) => Sql<P>
-	): <R = MutationResult>(params: PartialDeep<P>) => PreparedStatement<R> {
-		return <R = MutationResult>(
-			params: PartialDeep<P>
-		): PreparedStatement<R> => {
-			const sqlFn: SqlFn<P> = (strings, ...params) =>
-				new Sql<P>(strings, params)
-			const statement = builder({ sql: sqlFn })
-			const { sql, values, jsonColumns } = statement.withParams(
-				params as P,
-				true
-			)
+	): XStatementSync<P> {
+		return createXStatementSync<P>((params) => {
+			const { sql, values, jsonColumns } = builder({
+				sql: (strings, ...params) => {
+					return new Sql<P>(strings, params)
+				},
+			}).withParams(params)
+			const stmt = this.prepareStatement(sql)
 
-			this.#logger.debug("Executing mutation", { sql })
-			try {
-				const stmt = this.prepareStatement(sql)
-				return createPreparedStatement<R>(stmt, values, jsonColumns)
-			} catch (error) {
-				this.#logger.error("Mutation failed", { sql, error })
-				if (isNodeSqliteError(error)) {
-					throw NodeSqliteError.fromNodeSqlite(error)
-				}
-				throw new NodeSqliteError(
-					"ERR_SQLITE_MUTATE",
-					SqlitePrimaryResultCode.SQLITE_ERROR,
-					"Mutation failed",
-					error instanceof Error ? error.message : String(error),
-					error instanceof Error ? error : undefined
-				)
-			}
-		}
+			return { stmt, values, jsonColumns }
+		})
 	}
+
 	backup(filename: string): void {
 		this.#logger.info("Starting database backup", { filename })
 		try {

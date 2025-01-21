@@ -67,13 +67,13 @@ function toSupportedValue(value: unknown): SupportedValueType {
 export class Sql<P extends { [key: string]: unknown }> {
 	readonly #strings: readonly string[]
 	readonly #paramOperators: ReadonlyArray<ParamValue<P>>
-	readonly #defaultParams: Partial<P>
+	readonly #defaultParams: PartialDeep<P>
 	readonly #jsonColumns = new Set<string>()
 
 	constructor(
 		strings: readonly string[],
 		paramOperators: ReadonlyArray<ParamValue<P>>,
-		defaultParams: Partial<P> = {} as Partial<P>
+		defaultParams: PartialDeep<P> = {} as PartialDeep<P>
 	) {
 		this.#strings = strings
 		this.#paramOperators = paramOperators
@@ -148,7 +148,7 @@ export class Sql<P extends { [key: string]: unknown }> {
 				const value =
 					paramName in params
 						? params[paramName]
-						: this.#defaultParams[paramName]
+						: this.#defaultParams[paramName as string]
 
 				// Only mutations need to check for missing parameters
 				if (value === undefined && isMutation) {
@@ -182,12 +182,12 @@ export class Sql<P extends { [key: string]: unknown }> {
 /**
  * Interface for prepared statements with type safety
  */
-export interface PreparedStatement<T> {
-	all(): T[]
+export interface XStatementSync<P extends Record<string, unknown> | undefined> {
+	all<R>(params: P): R[]
 	expandedSQL: string
-	iterate(): Iterator<T>
-	get(): T | undefined
-	run(): StatementResultingChanges
+	iterate<R>(params: P): Iterator<R>
+	get<R>(params: P): R | undefined
+	run(params: P): StatementResultingChanges
 	sourceSQL: string
 }
 
@@ -216,79 +216,133 @@ export function parseJsonColumns(
 	}
 	return result
 }
+
+type CreateXStatementSyncProps<
+	P extends { [key: string]: unknown } | undefined,
+> = (params: P) => {
+	stmt: StatementSync
+	values: SupportedValueType[]
+	jsonColumns: string[]
+}
 /**
  * Creates a type-safe prepared statement
  */
-export function createPreparedStatement<T>(
-	stmt: StatementSync,
-	values: SupportedValueType[],
-	jsonColumns: string[] = []
-): PreparedStatement<T> {
+// Update the factory function
+export function createXStatementSync<
+	P extends Record<string, unknown> | undefined,
+>(props: CreateXStatementSyncProps<P>): XStatementSync<P> {
 	return {
-		all: () =>
-			stmt
-				.all(...values)
-				.map((row) =>
-					parseJsonColumns(row as Record<string, unknown>, jsonColumns)
-				) as T[],
-
-		get: () => {
-			const row = stmt.get(...values)
-			return row
-				? (parseJsonColumns(row as Record<string, unknown>, jsonColumns) as T)
-				: undefined
+		all<R>(params: P) {
+			try {
+				const { stmt, values, jsonColumns } = props(params)
+				return stmt
+					.all(...values)
+					.map((row) =>
+						parseJsonColumns(row as Record<string, unknown>, jsonColumns)
+					) as R[]
+			} catch (error) {
+				throw new NodeSqliteError(
+					"ERR_SQLITE_QUERY",
+					SqlitePrimaryResultCode.SQLITE_ERROR,
+					"Query execution failed",
+					error instanceof Error ? error.message : String(error),
+					error instanceof Error ? error : undefined
+				)
+			}
 		},
 
-		run: () => stmt.run(...values),
+		get<R>(params: P) {
+			try {
+				const { stmt, values, jsonColumns } = props(params)
+				const row = stmt.get(...values)
+				return row
+					? (parseJsonColumns(row as Record<string, unknown>, jsonColumns) as R)
+					: undefined
+			} catch (error) {
+				throw new NodeSqliteError(
+					"ERR_SQLITE_QUERY",
+					SqlitePrimaryResultCode.SQLITE_ERROR,
+					"Query execution failed",
+					error instanceof Error ? error.message : String(error),
+					error instanceof Error ? error : undefined
+				)
+			}
+		},
 
-		iterate: () => {
-			// @ts-expect-error -- node:sqlite types are incomplete
-			const baseIterator = stmt.iterate(...values)
-			return {
-				next(): IteratorResult<T> {
-					const result = baseIterator.next()
-					if (result.done) {
-						return { done: true, value: undefined }
-					}
-					return {
-						done: false,
-						value: parseJsonColumns(
-							result.value as Record<string, unknown>,
-							jsonColumns
-						) as T,
-					}
-				},
+		run(params: P) {
+			try {
+				const { stmt, values } = props(params)
+				return stmt.run(...values)
+			} catch (error) {
+				throw new NodeSqliteError(
+					"ERR_SQLITE_MUTATE",
+					SqlitePrimaryResultCode.SQLITE_ERROR,
+					"Mutation failed",
+					error instanceof Error ? error.message : String(error),
+					error instanceof Error ? error : undefined
+				)
+			}
+		},
+
+		iterate<R>(params: P) {
+			try {
+				const { stmt, values, jsonColumns } = props(params)
+				// @ts-expect-error -- @types/node types are incomplete
+				const baseIterator = stmt.iterate(...values)
+				return {
+					next(): IteratorResult<R> {
+						const result = baseIterator.next()
+						if (result.done) {
+							return { done: true, value: undefined }
+						}
+						return {
+							done: false,
+							value: parseJsonColumns(
+								result.value as Record<string, unknown>,
+								jsonColumns
+							) as R,
+						}
+					},
+				}
+			} catch (error) {
+				throw new NodeSqliteError(
+					"ERR_SQLITE_QUERY",
+					SqlitePrimaryResultCode.SQLITE_ERROR,
+					"Query execution failed",
+					error instanceof Error ? error.message : String(error),
+					error instanceof Error ? error : undefined
+				)
 			}
 		},
 
 		get expandedSQL() {
-			return stmt.expandedSQL
+			try {
+				const { stmt } = props({} as P)
+				return stmt.expandedSQL
+			} catch (error) {
+				throw new NodeSqliteError(
+					"ERR_SQLITE_QUERY",
+					SqlitePrimaryResultCode.SQLITE_ERROR,
+					"Failed to get expanded SQL",
+					error instanceof Error ? error.message : String(error),
+					error instanceof Error ? error : undefined
+				)
+			}
 		},
+
 		get sourceSQL() {
-			return stmt.sourceSQL
-		},
-	}
-}
-
-/**
- * Interface for binding parameters to prepared statements
- */
-export type StatementBinder<P extends { [key: string]: unknown }, T> = {
-	bind(params: PartialDeep<P>): PreparedStatement<T>
-}
-
-/**
- * Creates a type-safe statement binder
- */
-export function createStatementBinder<P extends { [key: string]: unknown }, T>(
-	statement: Sql<P>,
-	prepareStatement: (sql: string) => StatementSync
-): StatementBinder<P, T> {
-	return {
-		bind: (params: PartialDeep<P>) => {
-			const { sql, values, jsonColumns } = statement.withParams(params as P)
-			const stmt = prepareStatement(sql)
-			return createPreparedStatement<T>(stmt, values, jsonColumns)
+			try {
+				const { stmt } = props({} as P)
+				return stmt.sourceSQL
+			} catch (error) {
+				throw new NodeSqliteError(
+					"ERR_SQLITE_QUERY",
+					SqlitePrimaryResultCode.SQLITE_ERROR,
+					"Failed to get source SQL",
+					error instanceof Error ? error.message : String(error),
+					error instanceof Error ? error : undefined
+				)
+			}
 		},
 	}
 }

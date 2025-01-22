@@ -11,7 +11,6 @@ import type {
 	StatementSync,
 	SupportedValueType,
 } from "node:sqlite"
-import type { PartialDeep } from "type-fest"
 
 const stringify: typeof stringifyLib = createRequire(import.meta.url)(
 	"fast-safe-stringify"
@@ -21,7 +20,7 @@ const stringify: typeof stringifyLib = createRequire(import.meta.url)(
  * Represents a parameter operator that references a property of type P
  */
 export type ValueOfOperator<P extends { [key: string]: unknown }> =
-	`@${keyof P & string}`
+	`$${keyof P & string}`
 
 /**
  * Represents a parameter operator that converts a property to JSON
@@ -43,14 +42,6 @@ export type ParamValue<P extends { [key: string]: unknown }> =
 	| ToJson<P>
 	| FromJson<P>
 
-/**
- * Function type for SQL template literal tag
- */
-export type SqlFn<P extends { [key: string]: unknown }> = (
-	strings: TemplateStringsArray,
-	...params: Array<ParamValue<P>>
-) => Sql<P>
-
 function toSupportedValue(value: unknown): SupportedValueType {
 	if (
 		value === null ||
@@ -67,32 +58,13 @@ function toSupportedValue(value: unknown): SupportedValueType {
 export class Sql<P extends { [key: string]: unknown }> {
 	readonly #strings: readonly string[]
 	readonly #paramOperators: ReadonlyArray<ParamValue<P>>
-	readonly #defaultParams: PartialDeep<P>
-
-	#hasJsonColumns = false
 
 	constructor(
 		strings: readonly string[],
-		paramOperators: ReadonlyArray<ParamValue<P>>,
-		defaultParams: PartialDeep<P> = {} as PartialDeep<P>
+		paramOperators: ReadonlyArray<ParamValue<P>>
 	) {
 		this.#strings = strings
 		this.#paramOperators = paramOperators
-		this.#defaultParams = defaultParams
-	}
-
-	#extractParamName(op: ParamValue<P>): keyof P {
-		const match = op.match(/^@([^.]+)/)
-		if (!match) {
-			throw new NodeSqliteError(
-				"ERR_SQLITE_PARAM",
-				SqlitePrimaryResultCode.SQLITE_ERROR,
-				"Invalid parameter format",
-				`Parameter operator "${op}" must start with @`,
-				undefined
-			)
-		}
-		return match[1] as keyof P
 	}
 
 	get sql(): string {
@@ -102,76 +74,94 @@ export class Sql<P extends { [key: string]: unknown }> {
 			const op = this.#paramOperators[i]
 
 			if (op.endsWith(".toJson")) {
-				result += `jsonb(?) ${this.#strings[i + 1]}`
+				result += `json(${op.split(".")[0]}) ${this.#strings[i + 1]}`
 			} else if (op.endsWith(".fromJson")) {
 				const columnName = op.split(".")[0].substring(1)
 				result += `json_extract(${columnName}, '$') ${this.#strings[i + 1]}`
 			} else {
-				result += `? ${this.#strings[i + 1]}`
+				result += `${op} ${this.#strings[i + 1]}`
 			}
 		}
 		return result
 	}
 
 	get hasJsonColumns(): boolean {
+		const { sql } = this
 		return (
-			this.sql.includes("json_extract") ||
-			this.sql.includes("json(") ||
-			this.sql.includes("jsonb(") ||
-			this.#hasJsonColumns
+			sql.includes("json_extract") ||
+			sql.includes("json(") ||
+			sql.includes("jsonb(") ||
+			sql.includes("json_array") ||
+			sql.includes("json_object") ||
+			sql.includes("json_type") ||
+			sql.includes("json_valid") ||
+			sql.includes("json_patch") ||
+			sql.includes("json_group_array") ||
+			sql.includes("json_group_object") ||
+			sql.includes("json_tree") ||
+			sql.includes("json_each") ||
+			sql.includes("->") ||
+			sql.includes("->>")
 		)
 	}
 
-	withParams(
-		params: P,
-		isMutation = false
-	): {
-		sql: string
-		values: SupportedValueType[]
-		hasJsonColumns: boolean
-	} {
-		const values = this.#paramOperators
-			.map((op) => {
-				// For fromJson operations in queries, we don't need any values at all
-				if (op.endsWith(".fromJson") && !isMutation) {
-					this.#hasJsonColumns = true
-					return null
-				}
+	#toNamedParams(params: P): Record<string, SupportedValueType> {
+		const namedParams: Record<string, SupportedValueType> = {}
 
-				const paramName = this.#extractParamName(op)
-				const value =
-					paramName in params
-						? params[paramName]
-						: this.#defaultParams[paramName as string]
+		for (const op of this.#paramOperators) {
+			// Skip fromJson operations as they don't need parameters
+			if (op.endsWith(".fromJson")) {
+				continue
+			}
 
-				// Only mutations need to check for missing parameters
-				if (value === undefined && isMutation) {
+			const paramName = op.split(".")[0].substring(1) // Remove $ prefix
+			const value = params[paramName]
+
+			if (value === undefined) {
+				throw new NodeSqliteError(
+					"ERR_SQLITE_PARAM",
+					SqlitePrimaryResultCode.SQLITE_ERROR,
+					"Missing parameter",
+					`Parameter '${paramName}' is undefined`,
+					undefined
+				)
+			}
+
+			if (op.endsWith(".toJson")) {
+				if (
+					typeof value !== "object" &&
+					!Array.isArray(value) &&
+					value !== null
+				) {
 					throw new NodeSqliteError(
 						"ERR_SQLITE_PARAM",
 						SqlitePrimaryResultCode.SQLITE_ERROR,
-						"Missing parameter",
-						`Parameter '${String(paramName)}' is undefined`,
+						"Invalid parameter",
+						`Parameter '${paramName}' must be an object or array for JSON conversion`,
 						undefined
 					)
 				}
+				namedParams[`$${paramName}`] = stringify(value)
+			} else {
+				namedParams[`$${paramName}`] = toSupportedValue(value)
+			}
+		}
 
-				if (op.endsWith(".toJson")) {
-					this.#hasJsonColumns = true
-					return stringify(value)
-				}
+		return namedParams
+	}
 
-				return toSupportedValue(value)
-			})
-			.filter((value): value is NonNullable<typeof value> => value !== null)
-
+	prepare(params: P): {
+		sql: string
+		namedParams: Record<string, SupportedValueType>
+		hasJsonColumns: boolean
+	} {
 		return {
 			sql: this.sql,
-			values,
+			namedParams: this.#toNamedParams(params),
 			hasJsonColumns: this.hasJsonColumns,
 		}
 	}
 }
-
 /**
  * Interface for prepared statements with type safety
  */
@@ -211,7 +201,8 @@ export function parseJsonColumns(
 	for (const [key, value] of Object.entries(result)) {
 		if (looksLikeJSON(value)) {
 			try {
-				result[key] = JSON.parse(value)
+				const data = JSON.parse(value)
+				result[key] = data
 			} catch {
 				// Keep original value if parsing fails
 			}
@@ -223,7 +214,7 @@ type CreateXStatementSyncProps<
 	P extends { [key: string]: unknown } | undefined,
 > = (params: P) => {
 	stmt: StatementSync
-	values: SupportedValueType[]
+	namedParams: Record<string, SupportedValueType>
 	hasJsonColumns: boolean
 }
 
@@ -238,8 +229,8 @@ export function createXStatementSync<
 	return {
 		all<R = RET>(params: P) {
 			try {
-				const { stmt, values, hasJsonColumns } = props(params)
-				const results = stmt.all(...values)
+				const { stmt, namedParams, hasJsonColumns } = props(params)
+				const results = stmt.all(namedParams)
 				if (!results || !results.length) {
 					// No results case
 					return (Array.isArray(results) ? [] : undefined) as R
@@ -276,8 +267,8 @@ export function createXStatementSync<
 
 		get<R = RET>(params: P) {
 			try {
-				const { stmt, values, hasJsonColumns } = props(params)
-				const row = stmt.get(...values)
+				const { stmt, namedParams, hasJsonColumns } = props(params)
+				const row = stmt.get(namedParams)
 
 				if (!row) {
 					return undefined
@@ -301,8 +292,8 @@ export function createXStatementSync<
 
 		run(params: P) {
 			try {
-				const { stmt, values } = props(params)
-				return stmt.run(...values)
+				const { stmt, namedParams } = props(params)
+				return stmt.run(namedParams)
 			} catch (error) {
 				throw new NodeSqliteError(
 					"ERR_SQLITE_MUTATE",
@@ -316,9 +307,9 @@ export function createXStatementSync<
 
 		iterate<R = RET>(params: P) {
 			try {
-				const { stmt, values, hasJsonColumns } = props(params)
+				const { stmt, namedParams, hasJsonColumns } = props(params)
 				// @ts-expect-error -- @types/node types are incomplete
-				const baseIterator = stmt.iterate(...values)
+				const baseIterator = stmt.iterate(namedParams)
 				return {
 					next(): IteratorResult<R> {
 						const result = baseIterator.next()

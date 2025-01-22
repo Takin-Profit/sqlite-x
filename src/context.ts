@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors.js"
 import type { ToJson, ValueOfOperator } from "#sql.js"
 import {
 	COMPARISON_OPERATORS,
@@ -11,7 +12,7 @@ import {
 import { validationErr, type ValidationError } from "#validate.js"
 import type { WhereClause } from "#where.js"
 
-type ValueType<P extends { [key: string]: unknown }> =
+export type ValueType<P extends { [key: string]: unknown }> =
 	| ValueOfOperator<P>
 	| ToJson<P>
 
@@ -20,7 +21,7 @@ type ValuesWithJsonColumns<P extends { [key: string]: unknown }> = [
 	{ jsonColumns: (keyof P)[] },
 ]
 
-type InsertOrSetOptions<P extends { [key: string]: unknown }> =
+export type InsertOrSetOptions<P extends { [key: string]: unknown }> =
 	| ValueType<P>[]
 	| "*"
 	| ValuesWithJsonColumns<P>
@@ -290,3 +291,173 @@ export function isSqlContext<P extends { [key: string]: unknown }>(
 }
 
 export type { SqlContext }
+
+type ContextValidationError = {
+	type: "DUPLICATE_CLAUSE" | "INCOMPATIBLE_CLAUSE" | "INVALID_COMBINATION"
+	message: string
+	clauses?: string[]
+}
+
+function validateContextCombination<P extends { [key: string]: unknown }>(
+	contexts: SqlContext<P>[]
+): ContextValidationError[] {
+	const errors: ContextValidationError[] = []
+
+	// Track which clauses we've seen
+	const seenClauses = new Set<keyof SqlContext<P>>()
+
+	// These clauses can only appear once
+	const uniqueClauses = new Set([
+		"values",
+		"set",
+		"returning",
+		"limit",
+		"offset",
+	])
+
+	// Track clause combinations that don't make sense together
+	const incompatiblePairs = new Map([
+		["values", new Set(["set"])],
+		["set", new Set(["values"])],
+	])
+
+	// Check for duplicate clauses and track what we've seen
+	for (const context of contexts) {
+		for (const [clause, value] of Object.entries(context)) {
+			if (value === undefined) {
+				continue
+			}
+
+			const clauseKey = clause as keyof SqlContext<P>
+
+			// Check if this is a unique clause that we've seen before
+			if (uniqueClauses.has(clauseKey) && seenClauses.has(clauseKey)) {
+				errors.push({
+					type: "DUPLICATE_CLAUSE",
+					message: `Clause "${clause}" cannot appear multiple times in a SQL statement`,
+					clauses: [clause],
+				})
+			}
+
+			// Check for incompatible clause combinations
+			const incompatibleWith = incompatiblePairs.get(clause)
+			if (incompatibleWith) {
+				for (const otherClause of incompatibleWith) {
+					if (seenClauses.has(otherClause as keyof SqlContext<P>)) {
+						errors.push({
+							type: "INCOMPATIBLE_CLAUSE",
+							message: `Clauses "${clause}" and "${otherClause}" cannot be used together`,
+							clauses: [clause, otherClause],
+						})
+					}
+				}
+			}
+
+			seenClauses.add(clauseKey)
+		}
+	}
+
+	// Validate specific combinations
+	if (seenClauses.has("values") && !seenClauses.has("returning")) {
+		// This is just an example - we might want INSERT to always have RETURNING
+		errors.push({
+			type: "INVALID_COMBINATION",
+			message: "INSERT operations should specify returning values",
+			clauses: ["values", "returning"],
+		})
+	}
+
+	// Validate order of clauses if we care about that
+	if (seenClauses.has("offset") && !seenClauses.has("limit")) {
+		errors.push({
+			type: "INVALID_COMBINATION",
+			message: "OFFSET clause requires a LIMIT clause",
+			clauses: ["offset", "limit"],
+		})
+	}
+
+	return errors
+}
+
+function combineContexts<P extends { [key: string]: unknown }>(
+	contexts: SqlContext<P>[]
+): SqlContext<P> {
+	// First validate the combination
+	const errors = validateContextCombination(contexts)
+	if (errors.length > 0) {
+		throw new NodeSqliteError(
+			"ERR_SQLITE_CONTEXT",
+			SqlitePrimaryResultCode.SQLITE_MISUSE,
+			"Invalid SQL context combination",
+			errors.map((e) => e.message).join("\n"),
+			undefined
+		)
+	}
+
+	// Helper function to combine where clauses safely
+	const combineWhereClauses = (
+		clause1: WhereClause<P> | undefined,
+		clause2: WhereClause<P> | undefined
+	): WhereClause<P> | undefined => {
+		if (!clause1) {
+			return clause2
+		}
+		if (!clause2) {
+			return clause1
+		}
+
+		const clause1Array = Array.isArray(clause1) ? clause1 : [clause1]
+		const clause2Array = Array.isArray(clause2) ? clause2 : [clause2]
+
+		// Ensure we're not exceeding the maximum allowed conditions
+		return [...clause1Array, "AND", ...clause2Array] as WhereClause<P>
+	}
+
+	// Helper function to combine orderBy clauses safely
+	const combineOrderByClauses = (
+		orderBy1: Partial<Record<keyof P, "ASC" | "DESC">> | undefined,
+		orderBy2: Partial<Record<keyof P, "ASC" | "DESC">> | undefined
+	): Partial<Record<keyof P, "ASC" | "DESC">> | undefined => {
+		if (!orderBy1) {
+			return orderBy2
+		}
+		if (!orderBy2) {
+			return orderBy1
+		}
+
+		return {
+			...orderBy1,
+			...orderBy2,
+		} as Partial<Record<keyof P, "ASC" | "DESC">>
+	}
+
+	return contexts.reduce<SqlContext<P>>(
+		(combined, current) => {
+			// Create new object with explicit property assignments
+			const result: SqlContext<P> = {}
+
+			// Assign values from combined if they exist
+			// sourcery skip: use-braces
+			if (combined.values !== undefined) result.values = combined.values
+			if (combined.set !== undefined) result.set = combined.set
+			if (combined.limit !== undefined) result.limit = combined.limit
+			if (combined.offset !== undefined) result.offset = combined.offset
+			if (combined.returning !== undefined)
+				result.returning = combined.returning
+
+			// Assign values from current if they exist
+			if (current.values !== undefined) result.values = current.values
+			if (current.set !== undefined) result.set = current.set
+			if (current.limit !== undefined) result.limit = current.limit
+			if (current.offset !== undefined) result.offset = current.offset
+			if (current.returning !== undefined) result.returning = current.returning
+
+			// Handle special cases with combine functions
+			result.where = combineWhereClauses(combined.where, current.where)
+			result.orderBy = combineOrderByClauses(combined.orderBy, current.orderBy)
+
+			return result
+		},
+		{} as SqlContext<P>
+	)
+}

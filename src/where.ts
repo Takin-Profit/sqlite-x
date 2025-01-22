@@ -2,7 +2,7 @@ import type { ComparisonOperator, LogicalOperator } from "#types.js"
 
 // Single condition type
 type SingleWhereCondition<P extends { [key: string]: unknown }> =
-	| `${keyof P & string} ${ComparisonOperator} @${keyof P & string}`
+	| `${keyof P & string} ${ComparisonOperator} $${keyof P & string}`
 	| `${keyof P & string} IS NULL`
 	| `${keyof P & string} IS NOT NULL`
 

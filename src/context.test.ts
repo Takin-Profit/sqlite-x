@@ -1,11 +1,15 @@
-/* // Copyright 2025 Takin Profit. All rights reserved.
+// Copyright 2025 Takin Profit. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
 import { test, describe } from "node:test"
 import assert from "node:assert/strict"
-import { validateSqlContext, type SqlContext } from "./context.js"
-import type { ValidationError } from "./validate.js"
+import {
+	combineContexts,
+	validateContextCombination,
+	validateSqlContext,
+	type SqlContext,
+} from "./context.js"
 
 type TestUser = {
 	id: number
@@ -56,7 +60,7 @@ describe("SQL Context Validation", async () => {
 
 		test("accepts valid parameter operators", () => {
 			const context: SqlContext<TestUser> = {
-				values: ["@name", "@age", "@email"],
+				values: ["$name", "$age", "$email"],
 			}
 			const errors = validateSqlContext<TestUser>(context)
 			assert.equal(errors.length, 0)
@@ -64,7 +68,7 @@ describe("SQL Context Validation", async () => {
 
 		test("accepts toJson operators", () => {
 			const context: SqlContext<TestUser> = {
-				values: ["@metadata.toJson"],
+				values: ["$metadata.toJson"],
 			}
 			const errors = validateSqlContext<TestUser>(context)
 			assert.equal(errors.length, 0)
@@ -80,7 +84,7 @@ describe("SQL Context Validation", async () => {
 
 		test("rejects invalid parameter operators", () => {
 			const context = {
-				values: ["name", "no-at-sign", "@invalid.wrong"],
+				values: ["name", "no-at-sign", "$invalid.wrong"],
 			}
 			const errors = validateSqlContext<TestUser>(context)
 			assert.ok(errors.length > 0)
@@ -103,7 +107,7 @@ describe("SQL Context Validation", async () => {
 	describe("Where Clause Validation", () => {
 		test("accepts valid single condition", () => {
 			const context: SqlContext<TestUser> = {
-				where: "age != @age",
+				where: "age != $age",
 			}
 			const errors = validateSqlContext<TestUser>(context)
 			assert.equal(errors.length, 0)
@@ -119,7 +123,7 @@ describe("SQL Context Validation", async () => {
 
 		test("accepts valid compound conditions", () => {
 			const context: SqlContext<TestUser> = {
-				where: ["age != @age", "AND", "age != @createdAt"],
+				where: ["age != $age", "AND", "age != $createdAt"],
 			}
 			const errors = validateSqlContext<TestUser>(context)
 			assert.equal(errors.length, 0)
@@ -128,9 +132,9 @@ describe("SQL Context Validation", async () => {
 		test("rejects invalid conditions", () => {
 			const invalidConditions = [
 				"invalid condition",
-				"age >== @minAge",
-				"name LIKES @pattern",
-				["age >= @minAge", "INVALID_OP", "name LIKE @pattern"],
+				"age >== $minAge",
+				"name LIKES $pattern",
+				["age >= $minAge", "INVALID_OP", "name LIKE $pattern"],
 			]
 
 			for (const condition of invalidConditions) {
@@ -229,8 +233,8 @@ describe("SQL Context Validation", async () => {
 	describe("Complex Scenarios", () => {
 		test("accepts valid complex context", () => {
 			const context: SqlContext<TestUser> = {
-				values: ["@name", "@age", "@metadata.toJson"],
-				where: ["age != @createdAt", "AND", "isActive > @age"],
+				values: ["$name", "$age", "$metadata.toJson"],
+				where: ["age != $createdAt", "AND", "isActive > $age"],
 				orderBy: { name: "ASC", createdAt: "DESC" },
 				limit: 10,
 				offset: 20,
@@ -253,4 +257,53 @@ describe("SQL Context Validation", async () => {
 		})
 	})
 })
- */
+
+describe("Context Combination Validation", () => {
+	test("rejects duplicate unique clauses", () => {
+		const contexts: SqlContext<TestUser>[] = [
+			{ values: ["$name", "$age"] },
+			{ values: ["$email"] },
+		]
+		const errors = validateContextCombination(contexts)
+		assert.equal(errors.length, 2)
+	})
+
+	test("rejects incompatible clause combinations", () => {
+		const contexts: SqlContext<TestUser>[] = [
+			{ values: ["$name"] },
+			{ set: ["$age"] },
+		]
+		const errors = validateContextCombination(contexts)
+		assert.equal(errors.length, 2)
+	})
+
+	test("validates OFFSET requires LIMIT", () => {
+		const contexts: SqlContext<TestUser>[] = [{ offset: 10 }]
+		const errors = validateContextCombination(contexts)
+		assert.equal(errors.length, 1)
+		assert.equal(errors[0].type, "INVALID_COMBINATION")
+	})
+
+	test("allows valid combinations", () => {
+		const contexts: SqlContext<TestUser>[] = [
+			{ where: "age != $age" },
+			{ orderBy: { name: "ASC" } },
+			{ limit: 10, offset: 20 },
+		]
+		const errors = validateContextCombination(contexts)
+		assert.equal(errors.length, 0)
+	})
+
+	test("combines where clauses correctly", () => {
+		const contexts: SqlContext<TestUser>[] = [
+			{ where: "age != $createdAt" },
+			{ where: "name LIKE $age" },
+		]
+		const combined = combineContexts(contexts)
+		assert.deepEqual(combined.where, [
+			"age != $createdAt",
+			"AND",
+			"name LIKE $age",
+		])
+	})
+})

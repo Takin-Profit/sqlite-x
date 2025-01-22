@@ -256,16 +256,16 @@ function isValidSingleWhereCondition(value: unknown): boolean {
 		return false
 	}
 
-	// Match basic pattern: "column operator @param" or "column IS [NOT] NULL"
+	// Match basic pattern: "column operator $param" or "column IS [NOT] NULL"
 	const basicPattern = new RegExp(
-		`^[\\w]+\\s+(${COMPARISON_OPERATORS.join("|")})\\s+@[\\w]+$|^[\\w]+\\s+IS(\\s+NOT)?\\s+NULL$`
+		`^[\\w]+\\s+(${COMPARISON_OPERATORS.join("|")})\\s+\\$[\\w]+$|^[\\w]+\\s+IS(\\s+NOT)?\\s+NULL$`
 	)
 	return basicPattern.test(value)
 }
 
 function isValidValueType(value: string): boolean {
 	return (
-		value.startsWith("@") &&
+		value.startsWith("$") &&
 		(value.includes(".toJson") ? value.endsWith(".toJson") : true)
 	)
 }
@@ -298,9 +298,9 @@ type ContextValidationError = {
 	clauses?: string[]
 }
 
-function validateContextCombination<P extends { [key: string]: unknown }>(
-	contexts: SqlContext<P>[]
-): ContextValidationError[] {
+export function validateContextCombination<
+	P extends { [key: string]: unknown },
+>(contexts: SqlContext<P>[]): ContextValidationError[] {
 	const errors: ContextValidationError[] = []
 
 	// Track which clauses we've seen
@@ -379,7 +379,7 @@ function validateContextCombination<P extends { [key: string]: unknown }>(
 	return errors
 }
 
-function combineContexts<P extends { [key: string]: unknown }>(
+export function combineContexts<P extends { [key: string]: unknown }>(
 	contexts: SqlContext<P>[]
 ): SqlContext<P> {
 	// First validate the combination

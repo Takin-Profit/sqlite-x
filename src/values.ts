@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-import type { InsertOrSetOptions, ValueType } from "#context.js"
+import type { InsertOrSetOptions } from "#context.js"
 import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors.js"
 
 type BuildValuesResult = {
@@ -10,7 +10,7 @@ type BuildValuesResult = {
 	hasJsonColumns: boolean
 }
 
-function buildValuesStatement<P extends { [key: string]: unknown }>(
+export function buildValuesStatement<P extends { [key: string]: unknown }>(
 	values: InsertOrSetOptions<P>,
 	params: P
 ): BuildValuesResult {

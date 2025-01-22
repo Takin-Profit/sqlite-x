@@ -242,9 +242,9 @@ test("enforces NOT NULL constraints", () => {
 		age: number
 	}>(
 		({ sql }) => sql`
-      INSERT INTO users (name, age)
-      VALUES (${"$age"}, ${"$age"})
-    `
+            INSERT INTO users (name, age)
+            VALUES (${"$name"}, ${"$age"})
+        `
 	)
 
 	assert.throws(

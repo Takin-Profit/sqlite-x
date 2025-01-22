@@ -20,13 +20,13 @@ const stringify: typeof stringifyLib = createRequire(import.meta.url)(
 /**
  * Represents a parameter operator that references a property of type P
  */
-type ValueOfOperator<P extends { [key: string]: unknown }> =
+export type ValueOfOperator<P extends { [key: string]: unknown }> =
 	`@${keyof P & string}`
 
 /**
  * Represents a parameter operator that converts a property to JSON
  */
-type ToJson<P extends { [key: string]: unknown }> =
+export type ToJson<P extends { [key: string]: unknown }> =
 	`${ValueOfOperator<P>}.toJson`
 
 /**
@@ -38,7 +38,7 @@ type FromJson<P extends { [key: string]: unknown }> =
 /**
  * Union type of all possible parameter operators
  */
-type ParamValue<P extends { [key: string]: unknown }> =
+export type ParamValue<P extends { [key: string]: unknown }> =
 	| ValueOfOperator<P>
 	| ToJson<P>
 	| FromJson<P>

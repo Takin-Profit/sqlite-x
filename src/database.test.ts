@@ -243,7 +243,7 @@ test("enforces NOT NULL constraints", () => {
 	}>(
 		({ sql }) => sql`
       INSERT INTO users (name, age)
-      VALUES (${"@name"}, ${"@age"})
+      VALUES (${"@age"}, ${"@age"})
     `
 	)
 

@@ -14,7 +14,10 @@ export function buildValuesStatement<P extends { [key: string]: unknown }>(
 	values: InsertOrSetOptions<P>,
 	params: P
 ): BuildValuesResult {
-	// If values is "*", use all keys from params
+	const isValueType = (value: unknown): value is string => {
+		return typeof value === "string"
+	}
+
 	if (values === "*") {
 		const columns = Object.keys(params)
 		return {
@@ -23,29 +26,54 @@ export function buildValuesStatement<P extends { [key: string]: unknown }>(
 		}
 	}
 
-	// Handle ValuesWithJsonColumns case
 	if (Array.isArray(values) && values[0] === "*" && values.length === 2) {
+		if (
+			!values[1] ||
+			typeof values[1] !== "object" ||
+			!("jsonColumns" in values[1])
+		) {
+			throw new NodeSqliteError(
+				"ERR_SQLITE_PARAM",
+				SqlitePrimaryResultCode.SQLITE_ERROR,
+				"Invalid JSON columns configuration",
+				"Second element must be an object with jsonColumns array",
+				undefined
+			)
+		}
+
 		const jsonColumns = new Set(
 			(values[1] as { jsonColumns: string[] }).jsonColumns
 		)
 		const columns = Object.keys(params)
+		const existingJsonColumns = [...jsonColumns].filter((col) =>
+			columns.includes(col)
+		)
 		const placeholders = columns.map((col) =>
-			jsonColumns.has(col) ? `json($${col})` : `$${col}`
+			jsonColumns.has(col) ? `jsonb($${col})` : `$${col}`
 		)
 
 		return {
 			sql: `(${columns.join(", ")}) VALUES (${placeholders.join(", ")})`,
-			hasJsonColumns: jsonColumns.size > 0,
+			hasJsonColumns: existingJsonColumns.length > 0,
 		}
 	}
 
-	// Handle ValueType array case
 	if (Array.isArray(values)) {
 		const columns: string[] = []
 		const placeholders: string[] = []
 		let hasJson = false
 
 		for (const op of values) {
+			if (!isValueType(op)) {
+				throw new NodeSqliteError(
+					"ERR_SQLITE_PARAM",
+					SqlitePrimaryResultCode.SQLITE_ERROR,
+					"Invalid parameter format",
+					`Parameter must be a string but got ${typeof op}`,
+					undefined
+				)
+			}
+
 			const match = op.match(/^\$([^.]+)(?:\.toJson)?$/)
 			if (!match) {
 				throw new NodeSqliteError(
@@ -59,9 +87,8 @@ export function buildValuesStatement<P extends { [key: string]: unknown }>(
 
 			const column = match[1]
 			columns.push(column)
-
 			if (op.endsWith(".toJson")) {
-				placeholders.push(`json($${column})`)
+				placeholders.push(`jsonb($${column})`)
 				hasJson = true
 			} else {
 				placeholders.push(`$${column}`)

@@ -19,6 +19,7 @@
   "scripts": {
     "build": "tsup",
     "test": "tsx --test --experimental-sqlite src/**/*.test.ts",
+    "test:sql": "tsx --test --test-name-pattern \"Sql.formatSql\" --experimental-sqlite src/**/*.test.ts",
     "test:only": "tsx --test --experimental-sqlite --test-only src/**/*.test.ts"
   },
   "keywords": [
@@ -41,6 +42,7 @@
     "type-fest": "^4.33.0"
   },
   "dependencies": {
+    "@sqltools/formatter": "^1.2.5",
     "fast-safe-stringify": "^2.1.1"
   },
   "engines": {

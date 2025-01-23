@@ -262,7 +262,7 @@ describe("Values Context SQL Generation", () => {
 		)
 		assert.equal(
 			stmt.sourceSQL({ simple_text: "test", data_one: "data" }).trim(),
-			"INSERT INTO test_data (\n  simple_text,\n  data_one\n)\nVALUES (\n  $simple_text,\n  $data_one\n)"
+			"INSERT INTO test_data (simple_text, data_one)\nVALUES ($simple_text, $data_one)"
 		)
 	})
 
@@ -280,7 +280,7 @@ describe("Values Context SQL Generation", () => {
 			stmt
 				.sourceSQL({ simple_text: "test", data_one: { value: "test value" } })
 				.trim(),
-			"INSERT INTO test_data (\n  simple_text,\n  data_one\n)\nVALUES (\n  $simple_text,\n  jsonb(\n  $data_one\n)\n)"
+			"INSERT INTO test_data (simple_text, data_one)\nVALUES ($simple_text, jsonb($data_one))"
 		)
 	})
 
@@ -305,7 +305,7 @@ describe("Values Context SQL Generation", () => {
 					data_two: { count: 42 },
 				})
 				.trim(),
-			"INSERT INTO test_data (\n  simple_text,\n  data_one,\n  data_two\n)\nVALUES (\n  $simple_text,\n  jsonb(\n  $data_one\n),\n  jsonb(\n  $data_two\n)\n)"
+			"INSERT INTO test_data (simple_text, data_one, data_two)\nVALUES ($simple_text, jsonb($data_one), jsonb($data_two))"
 		)
 	})
 
@@ -330,7 +330,7 @@ describe("Values Context SQL Generation", () => {
 					data_two: { count: 42 },
 				})
 				.trim(),
-			"INSERT INTO test_data (\n  simple_text,\n  data_one,\n  data_two\n)\nVALUES (\n  $simple_text,\n  jsonb(\n  $data_one\n),\n  jsonb(\n  $data_two\n)\n)"
+			"INSERT INTO test_data (simple_text, data_one, data_two)\nVALUES ($simple_text, jsonb($data_one), jsonb($data_two))"
 		)
 	})
 })
@@ -373,7 +373,7 @@ describe("Values Context SQL Generation", () => {
 					data_one: "data",
 				})
 				.trim(),
-			"INSERT INTO test_data (\n  simple_text,\n  data_one\n)\nVALUES (\n  $simple_text,\n  $data_one\n)"
+			"INSERT INTO test_data (simple_text, data_one)\nVALUES ($simple_text, $data_one)"
 		)
 	})
 	test("generates SQL for complex object with nested JSON", () => {
@@ -408,7 +408,7 @@ describe("Values Context SQL Generation", () => {
 					tags: ["tag1"],
 				})
 				.trim(),
-			"INSERT INTO test_data (\n  simple_text,\n  metadata,\n  settings,\n  config,\n  tags\n)\nVALUES (\n  $simple_text,\n  jsonb(\n  $metadata\n),\n  jsonb(\n  $settings\n),\n  jsonb(\n  $config\n),\n  jsonb(\n  $tags\n)\n)"
+			"INSERT INTO test_data (simple_text, metadata, settings, config, tags)\nVALUES (\n    $simple_text,\n    jsonb($metadata),\n    jsonb($settings),\n    jsonb($config),\n    jsonb($tags)\n  )"
 		)
 	})
 
@@ -450,7 +450,7 @@ describe("Values Context SQL Generation", () => {
 					config: { key: "value5" },
 				})
 				.trim(),
-			"INSERT INTO test_data (\n  id,\n  data_one,\n  data_two,\n  metadata,\n  settings,\n  config\n)\nVALUES (\n  $id,\n  jsonb(\n  $data_one\n),\n  jsonb(\n  $data_two\n),\n  jsonb(\n  $metadata\n),\n  jsonb(\n  $settings\n),\n  jsonb(\n  $config\n)\n)"
+			"INSERT INTO test_data (\n  id,\n  data_one,\n  data_two,\n  metadata,\n  settings,\n  config\n)\nVALUES (\n    $id,\n    jsonb($data_one),\n    jsonb($data_two),\n    jsonb($metadata),\n    jsonb($settings),\n    jsonb($config)\n  )"
 		)
 	})
 })

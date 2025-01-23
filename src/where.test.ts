@@ -2,13 +2,14 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-import { test, describe } from "node:test"
+import { test, describe, beforeEach, afterEach } from "node:test"
 import assert from "node:assert/strict"
 import {
 	buildWhereStatement,
 	validateWhereClause,
 	type WhereClause,
-} from "./where"
+} from "#where"
+import { DB } from "#database"
 
 interface TestUser {
 	id: number
@@ -289,6 +290,111 @@ describe("buildWhereStatement", () => {
 		assert.equal(
 			result.sql,
 			"WHERE id = $id1 AND id = $id2 AND id = $id3 AND id = $id4 AND id = $id5 AND id = $id6 AND id = $id7 AND id = $id8 AND id = $id9 AND id = $id10"
+		)
+	})
+})
+
+describe("Where Context SQL Generation", () => {
+	let db: DB
+
+	beforeEach(() => {
+		db = new DB({
+			location: ":memory:",
+			environment: "testing",
+		})
+		db.exec(`
+     CREATE TABLE test_data (
+       id INTEGER PRIMARY KEY,
+       name TEXT,
+       age INTEGER,
+       active BOOLEAN,
+       metadata TEXT,
+       created_at TEXT,
+       email TEXT,
+       settings TEXT
+     );
+   `)
+	})
+
+	afterEach(() => {
+		db.close()
+	})
+
+	test("generates basic where condition", () => {
+		const stmt = db.prepare<{ id: number }>(
+			(ctx) => ctx.sql`SELECT * FROM test_data ${{ where: "id = $id" }}`
+		)
+		assert.equal(
+			stmt.sourceSQL({ id: 1 }).trim(),
+			"SELECT * FROM test_data WHERE id = $id"
+		)
+	})
+
+	test("generates where with AND conditions", () => {
+		type QueryParams = { min_age: number; active: boolean }
+		const stmt = db.prepare<QueryParams>(
+			(ctx) =>
+				ctx.sql`SELECT * FROM test_data ${{
+					// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+					where: ["age > $min_age", "AND", "active = $active"] as any,
+				}}`
+		)
+		assert.equal(
+			stmt.sourceSQL({ min_age: 18, active: true }).trim(),
+			"SELECT * FROM test_data WHERE age > $min_age\n  AND active = $active"
+		)
+	})
+
+	test("generates where with complex conditions", () => {
+		type QueryParams = {
+			min_age: number
+			pattern: string
+			active: boolean
+		}
+		const stmt = db.prepare<QueryParams>(
+			(ctx) =>
+				ctx.sql`SELECT * FROM test_data ${{
+					where: [
+						"age > $min_age",
+						"AND",
+						"name LIKE $pattern",
+						"OR",
+						"active = $active",
+						// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+					] as any,
+				}}`
+		)
+		assert.equal(
+			stmt.sourceSQL({ min_age: 18, pattern: "test%", active: true }).trim(),
+			"SELECT * FROM test_data WHERE age > $min_age\n  AND name LIKE $pattern\n  OR active = $active"
+		)
+	})
+
+	test("generates where with IS NULL", () => {
+		const stmt = db.prepare<Record<string, never>>(
+			(ctx) => ctx.sql`SELECT * FROM test_data ${{ where: "metadata IS NULL" }}`
+		)
+		assert.equal(
+			stmt.sourceSQL({}).trim(),
+			"SELECT * FROM test_data WHERE metadata IS NULL"
+		)
+	})
+
+	test("generates where with complex JSON conditions", () => {
+		type QueryParams = {
+			min_age: number
+			settings: { theme: string }
+		}
+		const stmt = db.prepare<QueryParams>(
+			(ctx) =>
+				ctx.sql`SELECT * FROM test_data ${{
+					// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+					where: ["age > $min_age", "AND", "settings = $settings->json"] as any,
+				}}`
+		)
+		assert.equal(
+			stmt.sourceSQL({ min_age: 18, settings: { theme: "dark" } }).trim(),
+			"SELECT * FROM test_data WHERE age > $min_age\n  AND settings = jsonb($settings)"
 		)
 	})
 })

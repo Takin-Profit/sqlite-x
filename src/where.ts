@@ -203,15 +203,15 @@ export function validateWhereClause<P extends DataRow>(
 	return errors
 }
 
+// In validateSingleCondition
 function validateSingleCondition<P extends DataRow>(
 	condition: string
 ): ValidationError[] {
-	// Match pattern: "column operator $param" or "column IS [NOT] NULL"
-	const basicPattern = new RegExp(
-		`^[\\w]+\\s+(${COMPARISON_OPERATORS.join("|")})\\s+\\$[\\w]+$|^[\\w]+\\s+IS(\\s+NOT)?\\s+NULL$`
+	const pattern = new RegExp(
+		`^[\\w]+\\s+(${COMPARISON_OPERATORS.join("|")})\\s+\\$[\\w->json]+$|^[\\w]+\\s+IS(\\s+NOT)?\\s+NULL$`
 	)
 
-	if (!basicPattern.test(condition)) {
+	if (!pattern.test(condition)) {
 		return [
 			validationErr({
 				msg: `Invalid condition format: ${condition}`,
@@ -227,11 +227,21 @@ export function buildWhereStatement(where: WhereClause<DataRow>): {
 	sql: string
 } {
 	if (typeof where === "string") {
+		if (where.includes("->json")) {
+			const [field, op, param] = where.trim().split(/\s+/)
+			const value = param.split("->")[0]
+			return { sql: `WHERE ${field} ${op} jsonb(${value})` }
+		}
 		return { sql: `WHERE ${where}` }
 	}
 
 	const conditions = where
 		.map((part, i) => {
+			if (i % 2 === 0 && part.includes("->json")) {
+				const [field, op, param] = part.trim().split(/\s+/)
+				const value = param.split("->")[0]
+				return `${field} ${op} jsonb(${value})`
+			}
 			return i % 2 === 0 ? part : ` ${part} `
 		})
 		.join("")

@@ -21,6 +21,8 @@ import type {
 } from "node:sqlite"
 import type { DataRow } from "#types"
 import { buildColumnsStatement } from "#columns"
+import { buildWhereStatement } from "#where.js"
+import sqlFormatter from "@sqltools/formatter"
 
 const stringify: typeof stringifyLib = createRequire(import.meta.url)(
 	"fast-safe-stringify"
@@ -90,33 +92,11 @@ export class Sql<P extends DataRow> {
 		this.#params = params
 	}
 
-	static formatSql(sqlInput: string): string {
-		const depth = 0
-		return `
-     ${sqlInput
-				.replace(/\bSELECT\b/g, "\nSELECT")
-				.replace(/\bFROM\b/g, "\nFROM")
-				.replace(/\bWHERE\b/g, "\nWHERE")
-				.replace(/\bGROUP BY\b/g, "\nGROUP BY")
-				.replace(/\bHAVING\b/g, "\nHAVING")
-				.replace(/\bORDER BY\b/g, "\nORDER BY")
-				.replace(/\bLIMIT\b/g, "\nLIMIT")
-				.replace(/\bVALUES\b/g, "\nVALUES")
-				.replace(/\bINSERT INTO\b/g, "\nINSERT INTO")
-				.replace(/\bUPDATE\b/g, "\nUPDATE")
-				.replace(/\bDELETE FROM\b/g, "\nDELETE FROM")
-				.replace(/([,(])/g, `$1\n${" ".repeat(depth + 2)}`)
-				.replace(/([)])/g, `\n${" ".repeat(Math.max(0, depth - 1))}$1`)}`
-			.trim()
-			.replace(/\s+\n/g, "\n")
-			.replace(/\n\s+/g, "\n  ")
-	}
-
 	#contextToSql(context: SqlContext<P>): string {
 		let sql = ""
 
 		if (context.columns) {
-			sql += Sql.formatSql(buildColumnsStatement(context.columns))
+			sql += sqlFormatter.format(buildColumnsStatement(context.columns))
 		}
 
 		// Handle values property if present
@@ -125,7 +105,11 @@ export class Sql<P extends DataRow> {
 				context.values,
 				this.#params
 			)
-			sql += Sql.formatSql(valuesSql)
+			sql += sqlFormatter.format(valuesSql)
+		}
+
+		if (context.where) {
+			sql += sqlFormatter.format(buildWhereStatement(context.where).sql)
 		}
 
 		// Future context properties will be handled here

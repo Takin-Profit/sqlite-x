@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-import type { Columns } from "#columns.js"
+import { validateColumns, type Columns } from "#columns.js"
 import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors"
 import type { ToJson, ParameterOperator } from "#sql"
 import {
@@ -102,6 +102,18 @@ export function validateSqlContext<P extends DataRow>(
 					)
 				}
 				break
+			case "columns": {
+				const columnErrors = validateColumns<P>(context[key])
+				if (columnErrors.length > 0) {
+					errors.push(
+						...columnErrors.map((err) => ({
+							...err,
+							path: `columns${err.path ? `.${err.path}` : ""}`,
+						}))
+					)
+				}
+				break
+			}
 
 			case "returning": {
 				const value = context[key]

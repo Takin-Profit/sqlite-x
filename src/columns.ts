@@ -24,19 +24,23 @@ type ConstraintPatterns<T, D extends DataType> = undefined extends T
 			| `${D} ${BaseConstraint} ${BaseConstraint} ${BaseConstraint}`
 
 type ValidColumnTypeMap<T> = T extends string
-	? ConstraintPatterns<T, "TEXT">
+	? ConstraintPatterns<T, "TEXT"> | "TEXT"
 	: T extends number
-		? ConstraintPatterns<T, "INTEGER"> | ConstraintPatterns<T, "REAL">
+		?
+				| ConstraintPatterns<T, "INTEGER">
+				| ConstraintPatterns<T, "REAL">
+				| "INTEGER"
+				| "REAL"
 		: T extends boolean
-			? ConstraintPatterns<T, "INTEGER">
+			? ConstraintPatterns<T, "INTEGER"> | "INTEGER"
 			: T extends bigint
-				? ConstraintPatterns<T, "INTEGER">
+				? ConstraintPatterns<T, "INTEGER"> | "INTEGER"
 				: T extends object | unknown[]
 					?
 							| ConstraintPatterns<T, "TEXT">
 							| ConstraintPatterns<T, "BLOB">
 							| "BLOB"
-							| "TEXT" // Allow bare types
+							| "TEXT"
 					: never
 
 export type Columns<T extends DataRow> = {
@@ -99,7 +103,7 @@ export function buildColumnsStatement<T extends DataRow>(
 		)
 	}
 
-	return Object.entries(columns)
+	return `(\n  ${Object.entries(columns)
 		.map(([name, def]) => `${name} ${String(def).trim()}`)
-		.join(",\n  ")
+		.join(",\n  ")}\n)`
 }

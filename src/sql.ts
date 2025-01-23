@@ -3,14 +3,24 @@
 // license that can be found in the LICENSE file.
 // noinspection t
 
-import {isSqlContext, type SqlContext, validateContextCombination, validateSqlContext,} from "#context"
-import {NodeSqliteError, SqlitePrimaryResultCode} from "#errors"
-import {buildValuesStatement} from "#values"
+import {
+	isSqlContext,
+	type SqlContext,
+	validateContextCombination,
+	validateSqlContext,
+} from "#context"
+import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors"
+import { buildValuesStatement } from "#values"
 import type stringifyLib from "fast-safe-stringify"
-import {createRequire} from "node:module"
-import type {Primitive} from "type-fest"
-import type {StatementResultingChanges, StatementSync, SupportedValueType,} from "node:sqlite"
-import type {DataRow} from "#types"
+import { createRequire } from "node:module"
+import type { Primitive } from "type-fest"
+import type {
+	StatementResultingChanges,
+	StatementSync,
+	SupportedValueType,
+} from "node:sqlite"
+import type { DataRow } from "#types"
+import { buildColumnsStatement } from "#columns"
 
 const stringify: typeof stringifyLib = createRequire(import.meta.url)(
 	"fast-safe-stringify"
@@ -104,6 +114,10 @@ export class Sql<P extends DataRow> {
 
 	#contextToSql(context: SqlContext<P>): string {
 		let sql = ""
+
+		if (context.columns) {
+			sql += Sql.formatSql(buildColumnsStatement(context.columns))
+		}
 
 		// Handle values property if present
 		if (context.values) {

@@ -3,10 +3,11 @@
 // license that can be found in the LICENSE file.
 
 // columns.test.ts
-import { test, describe } from "node:test"
+import { test, describe, beforeEach, afterEach } from "node:test"
 import assert from "node:assert/strict"
 import { validateColumns, type Columns, buildColumnsStatement } from "./columns"
-import { NodeSqliteError } from "#errors.js"
+import { NodeSqliteError } from "#errors"
+import { DB } from "#database"
 
 interface TestUser {
 	id: number
@@ -75,10 +76,7 @@ test("buildColumnsStatement generates correct SQL DDL", () => {
 	const sql = buildColumnsStatement(columns)
 	assert.equal(
 		sql,
-		"id INTEGER PRIMARY KEY AUTOINCREMENT,\n" +
-			"  name TEXT NOT NULL,\n" +
-			"  active INTEGER DEFAULT 1,\n" +
-			"  metadata BLOB"
+		"(\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  name TEXT NOT NULL,\n  active INTEGER DEFAULT 1,\n  metadata BLOB\n)"
 	)
 })
 
@@ -98,9 +96,7 @@ test("buildColumnsStatement handles complex constraints", () => {
 	const sql = buildColumnsStatement(columns)
 	assert.equal(
 		sql,
-		"id INTEGER PRIMARY KEY CHECK (id > 0) NOT NULL,\n" +
-			"  ref INTEGER FOREIGN KEY REFERENCES users (id),\n" +
-			"  code TEXT UNIQUE DEFAULT 'none'"
+		"(\n  id INTEGER PRIMARY KEY CHECK (id > 0) NOT NULL,\n  ref INTEGER FOREIGN KEY REFERENCES users (id),\n  code TEXT UNIQUE DEFAULT 'none'\n)"
 	)
 })
 
@@ -115,4 +111,68 @@ test("buildColumnsStatement throws on invalid definitions", () => {
 		() => buildColumnsStatement(invalidColumns as any),
 		NodeSqliteError
 	)
+})
+
+describe("Columns Context SQL Generation", () => {
+	let db: DB
+
+	beforeEach(() => {
+		db = new DB({
+			location: ":memory:",
+			environment: "testing",
+		})
+	})
+
+	afterEach(() => {
+		db.close()
+	})
+
+	test("generates CREATE TABLE with column definitions", () => {
+		interface TestTable {
+			id: number
+			name: string
+			active: boolean
+			data: object
+		}
+
+		const stmt = db.prepare<TestTable>(
+			(ctx) => ctx.sql`
+      CREATE TABLE test_table ${{
+				columns: {
+					id: "INTEGER PRIMARY KEY AUTOINCREMENT",
+					name: "TEXT NOT NULL",
+					active: "INTEGER DEFAULT 1",
+					data: "BLOB",
+				},
+			}}
+    `
+		)
+
+		assert.equal(
+			stmt.sourceSQL({} as TestTable).trim(),
+			"CREATE TABLE test_table (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  name TEXT NOT NULL,\n  active INTEGER DEFAULT 1,\n  data BLOB\n)"
+		)
+	})
+
+	test("validates CREATE TABLE with VALUES", () => {
+		interface TestTable {
+			id: number
+			name: string
+		}
+
+		const stmt = db.prepare<TestTable>(
+			(ctx) => ctx.sql`
+      CREATE TABLE test_table (
+        id INTEGER PRIMARY KEY,
+        name TEXT
+      );
+      INSERT INTO test_table ${{ values: ["$id", "$name"] }}
+    `
+		)
+
+		assert.equal(
+			stmt.sourceSQL({ id: 1, name: "test" }).trim(),
+			"CREATE TABLE test_table (\n        id INTEGER PRIMARY KEY,\n        name TEXT\n      );"
+		)
+	})
 })

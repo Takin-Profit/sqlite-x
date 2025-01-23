@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors.js"
-import type { ToJson, ValueOfOperator } from "#sql.js"
+import type { ToJson, ParameterOperator } from "#sql.js"
 import {
 	COMPARISON_OPERATORS,
 	LOGICAL_OPERATORS,
@@ -13,7 +13,7 @@ import { validationErr, type ValidationError } from "#validate.js"
 import type { WhereClause } from "#where.js"
 
 export type ValueType<P extends { [key: string]: unknown }> =
-	| ValueOfOperator<P>
+	| ParameterOperator<P>
 	| ToJson<P>
 
 type ValuesWithJsonColumns<P extends { [key: string]: unknown }> = [

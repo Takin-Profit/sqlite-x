@@ -110,7 +110,7 @@ describe("buildValuesStatement", () => {
 			}
 
 			const { sql, hasJsonColumns } = buildValuesStatement(
-				["$id", "$metadata.toJson", "$settings.toJson"],
+				["$id", "$metadata->json", "$settings->json"],
 				params
 			)
 
@@ -129,7 +129,7 @@ describe("buildValuesStatement", () => {
 			}
 
 			const { sql, hasJsonColumns } = buildValuesStatement(
-				["$id", "$name", "$metadata.toJson"],
+				["$id", "$name", "$metadata->json"],
 				params
 			)
 
@@ -189,7 +189,7 @@ describe("buildValuesStatement", () => {
 
 			assert.throws(
 				// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-				() => buildValuesStatement(["$metadata.tojson" as any], params),
+				() => buildValuesStatement(["$metadata->jso" as any], params),
 				(err: unknown) => {
 					assert(err instanceof NodeSqliteError)
 					assert(err.message.includes("must be in format"))
@@ -266,7 +266,7 @@ describe("Values Context SQL Generation", () => {
 		)
 	})
 
-	test("generates correct SQL for .toJson fields", () => {
+	test("generates correct SQL for ->json fields", () => {
 		type TestData = {
 			simple_text: string
 			data_one: { value: string }
@@ -274,7 +274,7 @@ describe("Values Context SQL Generation", () => {
 
 		const stmt = db.prepare<TestData>(
 			(ctx) =>
-				ctx.sql`INSERT INTO test_data ${{ values: ["$simple_text", "$data_one.toJson"] }}`
+				ctx.sql`INSERT INTO test_data ${{ values: ["$simple_text", "$data_one->json"] }}`
 		)
 		assert.equal(
 			stmt
@@ -284,7 +284,7 @@ describe("Values Context SQL Generation", () => {
 		)
 	})
 
-	test("generates correct SQL for multiple .toJson fields", () => {
+	test("generates correct SQL for multiple ->json fields", () => {
 		type TestData = {
 			simple_text: string
 			data_one: { value: string }
@@ -294,7 +294,7 @@ describe("Values Context SQL Generation", () => {
 		const stmt = db.prepare<TestData>(
 			(ctx) =>
 				ctx.sql`INSERT INTO test_data ${{
-					values: ["$simple_text", "$data_one.toJson", "$data_two.toJson"],
+					values: ["$simple_text", "$data_one->json", "$data_two->json"],
 				}}`
 		)
 		assert.equal(
@@ -390,10 +390,10 @@ describe("Values Context SQL Generation", () => {
 				ctx.sql`INSERT INTO test_data ${{
 					values: [
 						"$simple_text",
-						"$metadata.toJson",
-						"$settings.toJson",
-						"$config.toJson",
-						"$tags.toJson",
+						"$metadata->json",
+						"$settings->json",
+						"$config->json",
+						"$tags->json",
 					],
 				}}`
 		)

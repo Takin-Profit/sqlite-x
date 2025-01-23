@@ -74,20 +74,20 @@ export function buildValuesStatement<P extends { [key: string]: unknown }>(
 				)
 			}
 
-			const match = op.match(/^\$([^.]+)(?:\.toJson)?$/)
+			const match = op.match(/^\$([^->]+)(->json)?$/)
 			if (!match) {
 				throw new NodeSqliteError(
 					"ERR_SQLITE_PARAM",
 					SqlitePrimaryResultCode.SQLITE_ERROR,
 					"Invalid parameter format",
-					`Parameter "${op}" must be in format $column or $column.toJson`,
+					`Parameter "${op}" must be in format $column or $column->json`,
 					undefined
 				)
 			}
 
 			const column = match[1]
 			columns.push(column)
-			if (op.endsWith(".toJson")) {
+			if (op.endsWith("->json")) {
 				placeholders.push(`jsonb($${column})`)
 				hasJson = true
 			} else {

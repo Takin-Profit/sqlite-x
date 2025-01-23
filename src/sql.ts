@@ -13,6 +13,7 @@ import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors.js"
 import { buildValuesStatement } from "#values.js"
 import type stringifyLib from "fast-safe-stringify"
 import { createRequire } from "node:module"
+import type { Primitive } from "type-fest"
 import type {
 	StatementResultingChanges,
 	StatementSync,
@@ -26,26 +27,34 @@ const stringify: typeof stringifyLib = createRequire(import.meta.url)(
 /**
  * Represents a parameter operator that references a property of type P
  */
-export type ValueOfOperator<P extends { [key: string]: unknown }> =
+export type ParameterOperator<P extends { [key: string]: unknown }> =
 	`$${keyof P & string}`
+
+type IsNonPrimitive<T> = T extends Primitive ? never : T
+
+// Step 2: Get keys of non-primitive values
+type NonPrimitiveKeys<T> = {
+	[K in keyof T]: T[K] extends Primitive ? never : K
+}[keyof T]
 
 /**
  * Represents a parameter operator that converts a property to JSON
+ * Only allows non-primitive values to be converted to JSON
  */
 export type ToJson<P extends { [key: string]: unknown }> =
-	`${ValueOfOperator<P>}.toJson`
+	`$${NonPrimitiveKeys<P> & string}${"->json"}`
 
 /**
  * Represents a parameter operator that parses a property from JSON
+ * Only allows non-primitive values to be parsed from JSON
  */
-type FromJson<P extends { [key: string]: unknown }> =
-	`${ValueOfOperator<P>}.fromJson`
-
+export type FromJson<P extends { [key: string]: unknown }> =
+	`$${NonPrimitiveKeys<P> & string}${"<-json"}` // only supports json_extract
 /**
  * Union type of all possible parameter operators
  */
 export type ParamValue<P extends { [key: string]: unknown }> =
-	| ValueOfOperator<P>
+	| ParameterOperator<P>
 	| ToJson<P>
 	| FromJson<P>
 
@@ -123,6 +132,7 @@ export class Sql<P extends { [key: string]: unknown }> {
 		return sql
 	}
 
+	// SQL property update
 	get sql(): string {
 		let result = this.#strings[0]
 
@@ -133,10 +143,11 @@ export class Sql<P extends { [key: string]: unknown }> {
 				const contextSql = this.#contextToSql(op)
 				result += contextSql + this.#strings[i + 1]
 			} else if (typeof op === "string") {
-				if (op.endsWith(".toJson")) {
-					result += `jsonb(${op.split(".")[0]}) ${this.#strings[i + 1]}`
-				} else if (op.endsWith(".fromJson")) {
-					const columnName = op.split(".")[0].substring(1)
+				if (op.endsWith("->json")) {
+					const columnName = op.split("->")[0]
+					result += `jsonb(${columnName}) ${this.#strings[i + 1]}`
+				} else if (op.endsWith("<-json")) {
+					const columnName = op.split("<-")[0].substring(1)
 					result += `json_extract(${columnName}, '$') ${this.#strings[i + 1]}`
 				} else {
 					result += `${op} ${this.#strings[i + 1]}`
@@ -170,11 +181,11 @@ export class Sql<P extends { [key: string]: unknown }> {
 		const namedParams: Record<string, SupportedValueType> = {}
 
 		for (const op of this.#paramOperators) {
-			if (typeof op !== "string" || op.endsWith(".fromJson")) {
+			if (typeof op !== "string" || op.endsWith("<-json")) {
 				continue
 			}
 
-			const paramName = op.split(".")[0].substring(1)
+			const paramName = op.split("->")[0].substring(1)
 			const value = this.#params[paramName]
 
 			if (value === undefined) {
@@ -187,7 +198,7 @@ export class Sql<P extends { [key: string]: unknown }> {
 				)
 			}
 
-			if (op.endsWith(".toJson")) {
+			if (op.endsWith("->json")) {
 				if (
 					typeof value !== "object" &&
 					!Array.isArray(value) &&

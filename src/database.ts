@@ -28,6 +28,7 @@ import {
 	type XStatementSync,
 	Sql,
 	type SqlTemplateValues,
+	type FormatterConfig,
 } from "#sql"
 import type { DataRow } from "#types"
 
@@ -43,6 +44,7 @@ export interface DBOptions {
 	pragma?: PragmaConfig
 	environment?: "development" | "testing" | "production"
 	logger?: Logger
+	format?: FormatterConfig
 }
 
 /**
@@ -58,11 +60,13 @@ export class DB {
 	readonly #statementCache?: StatementCache
 	readonly #location: string
 	readonly #logger: Logger
+	readonly #formatConfig?: FormatterConfig
 
 	constructor(options: DBOptions = {}) {
 		const location = options.location ?? ":memory:"
 		this.#location = location
 		this.#logger = options.logger ?? new NoopLogger()
+		this.#formatConfig = options.format
 
 		this.#logger.debug("Initializing database", { location })
 
@@ -156,7 +160,7 @@ export class DB {
 		return createXStatementSync<P, R>((finalParams) => {
 			const { sql, namedParams, hasJsonColumns } = builder({
 				sql: (strings, ...params) => {
-					return new Sql<P>(strings, params, finalParams)
+					return new Sql<P>(strings, params, finalParams, this.#formatConfig)
 				},
 			}).prepare()
 			const stmt = this.prepareStatement(sql)

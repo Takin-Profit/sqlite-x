@@ -24,6 +24,7 @@ import { buildWhereStatement } from "#where.js"
 import sqlFormatter from "@sqltools/formatter"
 import { buildOrderByStatement } from "#order-by"
 import { buildColumnsStatement } from "#columns"
+import type { Config } from "@sqltools/formatter/lib/core/types"
 
 const stringify: typeof stringifyLib = createRequire(import.meta.url)(
 	"fast-safe-stringify"
@@ -77,20 +78,45 @@ function toSupportedValue(value: unknown): SupportedValueType {
 	return String(value)
 }
 
+export type FormatterConfig =
+	| false
+	| {
+			indent?: string // E.G. '\t', - Defaults to two spaces
+			reservedWordCase?: "upper" | "lower"
+			linesBetweenQueries?: number | "preserve"
+	  }
+
 export class Sql<P extends DataRow> {
 	readonly #strings: readonly string[]
 	readonly #paramOperators: SqlTemplateValues<P>
+
+	readonly #formatterConfig?: Config | false
 
 	#params: P
 
 	constructor(
 		strings: readonly string[],
 		paramOperators: SqlTemplateValues<P>,
-		params: P
+		params: P,
+		formatterConfig: FormatterConfig = {
+			indent: "  ",
+			reservedWordCase: "upper",
+			linesBetweenQueries: 1,
+		}
 	) {
 		this.#strings = strings
 		this.#paramOperators = paramOperators
 		this.#params = params
+		this.#formatterConfig = formatterConfig
+			? { ...formatterConfig, language: "sql" }
+			: false
+	}
+
+	#fmt(sql: string): string {
+		if (this.#formatterConfig) {
+			return sqlFormatter.format(sql, this.#formatterConfig)
+		}
+		return sql
 	}
 
 	#contextToSql(context: SqlContext<P>): string {
@@ -98,21 +124,17 @@ export class Sql<P extends DataRow> {
 
 		// Columns statement comes first
 		if (context.columns) {
-			parts.push(sqlFormatter.format(buildColumnsStatement(context.columns)))
+			parts.push(this.#fmt(buildColumnsStatement(context.columns)))
 		}
 
 		// Values and Set come next
 		if (context.values) {
 			parts.push(
-				sqlFormatter.format(
-					buildValuesStatement(context.values, this.#params).sql
-				)
+				this.#fmt(buildValuesStatement(context.values, this.#params).sql)
 			)
 		}
 		if (context.set) {
-			parts.push(
-				sqlFormatter.format(buildSetStatement(context.set, this.#params).sql)
-			)
+			parts.push(this.#fmt(buildSetStatement(context.set, this.#params).sql))
 		}
 
 		// Rest remains the same

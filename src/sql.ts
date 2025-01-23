@@ -122,10 +122,15 @@ export class Sql<P extends DataRow> {
 			sql += sqlFormatter.format(buildOrderByStatement(context.orderBy).sql)
 		}
 
-		// Future context properties will be handled here
-		// if (context.where) { ... }
-		// if (context.orderBy) { ... }
-		// etc.
+		if (context.limit !== undefined) {
+			sql += `\nLIMIT ${context.limit}`
+			if (context.offset !== undefined) {
+				sql += `\nOFFSET ${context.offset}`
+			}
+		} else if (context.offset !== undefined) {
+			// If only offset is specified, we need to use LIMIT with max value
+			sql += `\nLIMIT -1\nOFFSET ${context.offset}`
+		}
 
 		return sql
 	}

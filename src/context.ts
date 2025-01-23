@@ -5,14 +5,9 @@
 import { validateColumns, type Columns } from "#columns.js"
 import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors"
 import type { ToJson, ParameterOperator } from "#sql"
-import {
-	COMPARISON_OPERATORS,
-	type DataRow,
-	LOGICAL_OPERATORS,
-	type LogicalOperator,
-} from "#types"
+import type { DataRow } from "#types"
 import { validationErr, type ValidationError } from "#validate"
-import type { WhereClause } from "#where"
+import { validateWhereClause, type WhereClause } from "#where"
 
 export type ValueType<P extends DataRow> = ParameterOperator<P> | ToJson<P>
 
@@ -66,7 +61,9 @@ export function validateSqlContext<P extends DataRow>(
 			}
 
 			case "where": {
-				const whereErrors = validateWhereClause<P>(context[key])
+				const whereErrors = validateWhereClause<P>(
+					context[key] as WhereClause<P>
+				)
 				if (whereErrors.length > 0) {
 					errors.push(
 						...whereErrors.map((err) => ({
@@ -199,47 +196,6 @@ function validateInsertOrSetOptions<P extends DataRow>(
 	return errors
 }
 
-function validateWhereClause<P extends DataRow>(
-	value: unknown
-): ValidationError[] {
-	if (typeof value !== "string" && !Array.isArray(value)) {
-		return [validationErr({ msg: "Where clause must be a string or array" })]
-	}
-
-	if (typeof value === "string") {
-		// Validate single condition
-		if (!isValidSingleWhereCondition(value)) {
-			return [validationErr({ msg: "Invalid where condition format" })]
-		}
-		return []
-	}
-
-	// Validate array format
-	const errors: ValidationError[] = []
-	for (let i = 0; i < value.length; i++) {
-		const item = value[i]
-		if (i % 2 === 0) {
-			// Should be a condition
-			if (!isValidSingleWhereCondition(item)) {
-				errors.push(
-					validationErr({
-						msg: "Invalid where condition format",
-						path: `[${i}]`,
-					})
-				)
-			}
-		} else if (!LOGICAL_OPERATORS.includes(item as LogicalOperator)) {
-			errors.push(
-				validationErr({
-					msg: "Invalid logical operator",
-					path: `[${i}]`,
-				})
-			)
-		}
-	}
-	return errors
-}
-
 function validateOrderByClause(value: unknown): ValidationError[] {
 	if (typeof value !== "object" || value === null) {
 		return [
@@ -262,18 +218,6 @@ function validateOrderByClause(value: unknown): ValidationError[] {
 	}
 
 	return errors
-}
-
-function isValidSingleWhereCondition(value: unknown): boolean {
-	if (typeof value !== "string") {
-		return false
-	}
-
-	// Match basic pattern: "column operator $param" or "column IS [NOT] NULL"
-	const basicPattern = new RegExp(
-		`^[\\w]+\\s+(${COMPARISON_OPERATORS.join("|")})\\s+\\$[\\w]+$|^[\\w]+\\s+IS(\\s+NOT)?\\s+NULL$`
-	)
-	return basicPattern.test(value)
 }
 
 function isValidValueType(value: string): boolean {

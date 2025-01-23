@@ -357,25 +357,6 @@ export function validateContextCombination<
 		}
 	}
 
-	// Validate specific combinations
-	if (seenClauses.has("values") && !seenClauses.has("returning")) {
-		// This is just an example - we might want INSERT to always have RETURNING
-		errors.push({
-			type: "INVALID_COMBINATION",
-			message: "INSERT operations should specify returning values",
-			clauses: ["values", "returning"],
-		})
-	}
-
-	// Validate order of clauses if we care about that
-	if (seenClauses.has("offset") && !seenClauses.has("limit")) {
-		errors.push({
-			type: "INVALID_COMBINATION",
-			message: "OFFSET clause requires a LIMIT clause",
-			clauses: ["offset", "limit"],
-		})
-	}
-
 	return errors
 }
 

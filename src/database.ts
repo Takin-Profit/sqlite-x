@@ -27,7 +27,7 @@ import {
 	createXStatementSync,
 	type XStatementSync,
 	Sql,
-	type ParamValue,
+	type SqlTemplateValues,
 } from "#sql"
 
 export interface DBOptions {
@@ -43,7 +43,7 @@ export interface DBOptions {
  */
 export type SqlFn<P extends { [key: string]: unknown }> = (
 	strings: TemplateStringsArray,
-	...params: Array<ParamValue<P>>
+	...params: SqlTemplateValues<P>
 ) => Sql<P>
 
 export class DB {
@@ -143,30 +143,15 @@ export class DB {
 		}
 	}
 
-	query<P extends { [key: string]: unknown }, R = unknown>(
+	prepare<P extends { [key: string]: unknown }, R = unknown>(
 		builder: (ctx: { sql: SqlFn<P> }) => Sql<P>
 	): XStatementSync<P, R> {
-		return createXStatementSync<P, R>((params) => {
+		return createXStatementSync<P, R>((finalParams) => {
 			const { sql, namedParams, hasJsonColumns } = builder({
 				sql: (strings, ...params) => {
-					return new Sql<P>(strings, params)
+					return new Sql<P>(strings, params, finalParams)
 				},
-			}).prepare(params)
-			const stmt = this.prepareStatement(sql)
-
-			return { stmt, namedParams, hasJsonColumns }
-		})
-	}
-
-	mutation<P extends { [key: string]: unknown }, R = unknown>(
-		builder: (ctx: { sql: SqlFn<P> }) => Sql<P>
-	): XStatementSync<P, R> {
-		return createXStatementSync<P, R>((params) => {
-			const { sql, namedParams, hasJsonColumns } = builder({
-				sql: (strings, ...params) => {
-					return new Sql<P>(strings, params)
-				},
-			}).prepare(params)
+			}).prepare()
 			const stmt = this.prepareStatement(sql)
 
 			return { stmt, namedParams, hasJsonColumns }

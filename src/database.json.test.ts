@@ -39,7 +39,7 @@ test("handles simple object JSON storage and retrieval", { only: true }, () => {
 		active: true,
 	}
 
-	const insertData = db.mutation<{ data: SimpleObject }>(
+	const insertData = db.prepare<{ data: SimpleObject }>(
 		({ sql }) => sql`
       INSERT INTO json_test (simple_object)
       VALUES (${"$data.toJson"})
@@ -48,7 +48,7 @@ test("handles simple object JSON storage and retrieval", { only: true }, () => {
 
 	insertData.run({ data: simpleObject })
 
-	const getData = db.query<Record<string, never>>(
+	const getData = db.prepare<Record<string, never>>(
 		({ sql }) => sql`
       SELECT json_extract(simple_object, '$') as data
       FROM json_test
@@ -100,7 +100,7 @@ test("handles nested object JSON storage and retrieval", () => {
 		},
 	}
 
-	const insertData = db.mutation<{ data: NestedObject }>(
+	const insertData = db.prepare<{ data: NestedObject }>(
 		({ sql }) => sql`
       INSERT INTO json_test (nested_object)
       VALUES (${"$data.toJson"})
@@ -109,7 +109,7 @@ test("handles nested object JSON storage and retrieval", () => {
 
 	insertData.run({ data: nestedObject })
 
-	const getData = db.query<Record<string, never>>(
+	const getData = db.prepare<Record<string, never>>(
 		({ sql }) => sql`
       SELECT json_extract(nested_object, '$') as data
       FROM json_test
@@ -139,7 +139,7 @@ test("handles multiple row JSON operations", () => {
     )
   `)
 
-	const insertRows = db.mutation<{ data: RowData }>(
+	const insertRows = db.prepare<{ data: RowData }>(
 		({ sql }) => sql`
       INSERT INTO multi_test (data)
       VALUES (${"$data.toJson"})
@@ -150,7 +150,7 @@ test("handles multiple row JSON operations", () => {
 		insertRows.run({ data: row })
 	}
 
-	const getRows = db.query<Record<string, never>>(
+	const getRows = db.prepare<Record<string, never>>(
 		({ sql }) => sql`
     SELECT
       id,
@@ -199,7 +199,7 @@ test("handles JSON path queries", () => {
 		},
 	}
 
-	const insertData = db.mutation<{ data: TestData }>(
+	const insertData = db.prepare<{ data: TestData }>(
 		({ sql }) => sql`
       INSERT INTO json_test (nested_object)
       VALUES (${"$data.toJson"})
@@ -208,7 +208,7 @@ test("handles JSON path queries", () => {
 
 	insertData.all({ data })
 
-	const getData = db.query<Record<string, never>>(
+	const getData = db.prepare<Record<string, never>>(
 		({ sql }) => sql`
       SELECT
         json_extract(nested_object, '$') as data,
@@ -274,7 +274,7 @@ test("handles array of objects with mixed types", () => {
 		],
 	}
 
-	const insertData = db.mutation<{ data: ComplexArray }>(
+	const insertData = db.prepare<{ data: ComplexArray }>(
 		({ sql }) => sql`
       INSERT INTO json_test (array_data)
       VALUES (${"$data.toJson"})
@@ -283,7 +283,7 @@ test("handles array of objects with mixed types", () => {
 
 	insertData.run({ data: testData })
 
-	const getData = db.query<Record<string, never>>(
+	const getData = db.prepare<Record<string, never>>(
 		({ sql }) => sql`
       SELECT
         json_extract(array_data, '$') as full_data,
@@ -323,7 +323,7 @@ test("handles null and empty JSON values", () => {
 		emptyArray: [],
 	}
 
-	const insertData = db.mutation<{ data: NullableData }>(
+	const insertData = db.prepare<{ data: NullableData }>(
 		({ sql }) => sql`
       INSERT INTO json_test (nullable_json)
       VALUES (${"$data.toJson"})
@@ -332,7 +332,7 @@ test("handles null and empty JSON values", () => {
 
 	insertData.run({ data: testData })
 
-	const getData = db.query<Record<string, never>>(
+	const getData = db.prepare<Record<string, never>>(
 		({ sql }) => sql`
       SELECT
         json_extract(nullable_json, '$') as data,
@@ -379,7 +379,7 @@ test("handles JSON updates", () => {
 	}
 
 	// Insert initial data
-	const insertData = db.mutation<{ data: UpdateData }>(
+	const insertData = db.prepare<{ data: UpdateData }>(
 		({ sql }) => sql`
       INSERT INTO json_test (mixed_data)
       VALUES (${"$data.toJson"})
@@ -398,7 +398,7 @@ test("handles JSON updates", () => {
 		},
 	}
 
-	const updateData = db.mutation<{ data: UpdateData }>(
+	const updateData = db.prepare<{ data: UpdateData }>(
 		({ sql }) => sql`
       UPDATE json_test
       SET mixed_data = ${"$data.toJson"}
@@ -408,7 +408,7 @@ test("handles JSON updates", () => {
 	updateData.run({ data: updatedData })
 
 	// Verify the update
-	const getData = db.query<Record<string, never>>(
+	const getData = db.prepare<Record<string, never>>(
 		({ sql }) => sql`
       SELECT json_extract(mixed_data, '$') as data
       FROM json_test
@@ -442,7 +442,7 @@ test("handles nested JSON array operations", () => {
 		],
 	}
 
-	const insertData = db.mutation<{ data: NestedArrayData }>(
+	const insertData = db.prepare<{ data: NestedArrayData }>(
 		({ sql }) => sql`
       INSERT INTO json_test (array_data)
       VALUES (${"$data.toJson"})
@@ -451,7 +451,7 @@ test("handles nested JSON array operations", () => {
 
 	insertData.run({ data: testData })
 
-	const getData = db.query<Record<string, never>>(
+	const getData = db.prepare<Record<string, never>>(
 		({ sql }) => sql`
       SELECT
         json_extract(array_data, '$') as data,
@@ -490,7 +490,7 @@ test("handles fromJson when querying stored JSON data", () => {
 	}
 
 	// First store the JSON data using toJson
-	const insertUser = db.mutation<{ user_data: UserData }>(
+	const insertUser = db.prepare<{ user_data: UserData }>(
 		({ sql }) => sql`
     INSERT INTO json_test (simple_object)
     VALUES (${"$user_data.toJson"})
@@ -500,7 +500,7 @@ test("handles fromJson when querying stored JSON data", () => {
 	insertUser.run({ user_data: userData })
 
 	// Now query it back using fromJson
-	const getUser = db.query<Record<string, never>>(
+	const getUser = db.prepare<Record<string, never>>(
 		({ sql }) => sql`
     SELECT ${"$simple_object.fromJson"} as user_data
     FROM json_test
@@ -544,7 +544,7 @@ test("handles fromJson with nested JSON fields", () => {
 	}
 
 	// Store the data
-	const insertData = db.mutation<{ data: ComplexData }>(
+	const insertData = db.prepare<{ data: ComplexData }>(
 		({ sql }) => sql`
     INSERT INTO json_test (nested_object)
     VALUES (${"$data.toJson"})
@@ -554,7 +554,7 @@ test("handles fromJson with nested JSON fields", () => {
 	insertData.run({ data: testData })
 
 	// Query specific nested fields using fromJson
-	const getData = db.query<Record<string, never>>(
+	const getData = db.prepare<Record<string, never>>(
 		({ sql }) => sql`
     SELECT
       ${"$nested_object.fromJson"} as full_data,
@@ -595,7 +595,7 @@ test("handles mixed query with multiple fromJson operations", () => {
 	}
 
 	// Store both JSON objects
-	const insertData = db.mutation<{ profile: UserProfile; meta: UserMetadata }>(
+	const insertData = db.prepare<{ profile: UserProfile; meta: UserMetadata }>(
 		({ sql }) => sql`
     INSERT INTO json_test (simple_object, nested_object)
     VALUES (${"$profile.toJson"}, ${"$meta.toJson"})
@@ -605,7 +605,7 @@ test("handles mixed query with multiple fromJson operations", () => {
 	insertData.run({ profile, meta: metadata })
 
 	// Query both JSON fields using fromJson
-	const getData = db.query<Record<string, never>>(
+	const getData = db.prepare<Record<string, never>>(
 		({ sql }) => sql`
     SELECT
       ${"$simple_object.fromJson"} as profile,

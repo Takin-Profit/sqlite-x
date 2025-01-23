@@ -39,7 +39,7 @@ afterEach(() => {
 })
 
 test("executes basic SELECT query", () => {
-	const insertUser = db.mutation<{ name: string; age: number; email: string }>(
+	const insertUser = db.prepare<{ name: string; age: number; email: string }>(
 		({ sql }) => sql`
             INSERT INTO users (name, age, email)
             VALUES (${"$name"}, ${"$age"}, ${"$email"})
@@ -49,7 +49,7 @@ test("executes basic SELECT query", () => {
 	insertUser.run({ name: "John", age: 30, email: "john$example.com" })
 	insertUser.run({ name: "Jane", age: 25, email: "jane$example.com" })
 
-	const users = db.query<
+	const users = db.prepare<
 		{ minAge: number },
 		{
 			name: string
@@ -74,7 +74,7 @@ test("executes basic SELECT query", () => {
 })
 
 test("handles syntax errors", () => {
-	const query = db.query<Record<string, never>>(
+	const query = db.prepare<Record<string, never>>(
 		({ sql }) => sql`SELEC * FORM users`
 	)
 
@@ -88,7 +88,7 @@ test("handles syntax errors", () => {
 })
 
 test("handles complex WHERE conditions", () => {
-	const insertUser = db.mutation<{ name: string; age: number; email: string }>(
+	const insertUser = db.prepare<{ name: string; age: number; email: string }>(
 		({ sql }) => sql`
             INSERT INTO users (name, age, email)
             VALUES (${"$name"}, ${"$age"}, ${"$email"})
@@ -99,7 +99,7 @@ test("handles complex WHERE conditions", () => {
 	insertUser.run({ name: "Jane", age: 25, email: "jane$example.com" })
 	insertUser.run({ name: "Bob", age: 35, email: "bob$example.com" })
 
-	const getUsersQuery = db.query<{ minAge: number; nameLike: string }>(
+	const getUsersQuery = db.prepare<{ minAge: number; nameLike: string }>(
 		({ sql }) => sql`
             SELECT * FROM users
             WHERE age >= ${"$minAge"}
@@ -117,7 +117,7 @@ test("handles complex WHERE conditions", () => {
 })
 
 test("performs INSERT operation", () => {
-	const insertUser = db.mutation<{ name: string; age: number; email: string }>(
+	const insertUser = db.prepare<{ name: string; age: number; email: string }>(
 		({ sql }) => sql`
             INSERT INTO users (name, age, email)
             VALUES (${"$name"}, ${"$age"}, ${"$email"})
@@ -135,7 +135,7 @@ test("performs INSERT operation", () => {
 })
 
 test("performs UPDATE operation", () => {
-	const insertUser = db.mutation<{ name: string; age: number; email: string }>(
+	const insertUser = db.prepare<{ name: string; age: number; email: string }>(
 		({ sql }) => sql`
             INSERT INTO users (name, age, email)
             VALUES (${"$name"}, ${"$age"}, ${"$email"})
@@ -148,7 +148,7 @@ test("performs UPDATE operation", () => {
 		email: "john$example.com",
 	})
 
-	const updateUser = db.mutation<{ id: number | bigint; newAge: number }>(
+	const updateUser = db.prepare<{ id: number | bigint; newAge: number }>(
 		({ sql }) => sql`
             UPDATE users
             SET age = ${"$newAge"}
@@ -165,7 +165,7 @@ test("performs UPDATE operation", () => {
 })
 
 test("performs DELETE operation", () => {
-	const insertUser = db.mutation<{ name: string; age: number; email: string }>(
+	const insertUser = db.prepare<{ name: string; age: number; email: string }>(
 		({ sql }) => sql`
             INSERT INTO users (name, age, email)
             VALUES (${"$name"}, ${"$age"}, ${"$email"})
@@ -178,7 +178,7 @@ test("performs DELETE operation", () => {
 		email: "john$example.com",
 	})
 
-	const deleteUser = db.mutation<{ id: number | bigint }>(
+	const deleteUser = db.prepare<{ id: number | bigint }>(
 		({ sql }) => sql`
             DELETE FROM users
             WHERE id = ${"$id"}
@@ -190,7 +190,7 @@ test("performs DELETE operation", () => {
 })
 
 test("handles unique constraint violations", () => {
-	const insertUser = db.mutation<{ name: string; age: number; email: string }>(
+	const insertUser = db.prepare<{ name: string; age: number; email: string }>(
 		({ sql }) => sql`
             INSERT INTO users (name, age, email)
             VALUES (${"$name"}, ${"$age"}, ${"$email"})
@@ -217,7 +217,7 @@ test("handles unique constraint violations", () => {
 })
 
 test("handles foreign key constraints", () => {
-	const insertPost = db.mutation<{ title: string; userId: number }>(
+	const insertPost = db.prepare<{ title: string; userId: number }>(
 		({ sql }) => sql`
             INSERT INTO posts (title, user_id)
             VALUES (${"$title"}, ${"$userId"})
@@ -237,7 +237,7 @@ test("handles foreign key constraints", () => {
 })
 
 test("enforces NOT NULL constraints", () => {
-	const insertUser = db.mutation<{
+	const insertUser = db.prepare<{
 		name: string | null
 		age: number
 	}>(
@@ -263,7 +263,7 @@ test("caches prepared statements", () => {
 		statementCache: { maxSize: 10 },
 	})
 
-	const query = dbWithCache.query<{ minAge: number }>(
+	const query = dbWithCache.prepare<{ minAge: number }>(
 		// Use dbWithCache here
 		({ sql }) => sql`
             SELECT * FROM users

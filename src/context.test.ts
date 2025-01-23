@@ -265,7 +265,7 @@ describe("Context Combination Validation", () => {
 			{ values: ["$email"] },
 		]
 		const errors = validateContextCombination(contexts)
-		assert.equal(errors.length, 2)
+		assert.equal(errors.length, 1)
 	})
 
 	test("rejects incompatible clause combinations", () => {
@@ -274,14 +274,7 @@ describe("Context Combination Validation", () => {
 			{ set: ["$age"] },
 		]
 		const errors = validateContextCombination(contexts)
-		assert.equal(errors.length, 2)
-	})
-
-	test("validates OFFSET requires LIMIT", () => {
-		const contexts: SqlContext<TestUser>[] = [{ offset: 10 }]
-		const errors = validateContextCombination(contexts)
 		assert.equal(errors.length, 1)
-		assert.equal(errors[0].type, "INVALID_COMBINATION")
 	})
 
 	test("allows valid combinations", () => {

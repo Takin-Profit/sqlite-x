@@ -3,7 +3,14 @@
 // license that can be found in the LICENSE file.
 // noinspection t
 
+import {
+	isSqlContext,
+	validateContextCombination,
+	validateSqlContext,
+	type SqlContext,
+} from "#context.js"
 import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors.js"
+import { buildValuesStatement } from "#values.js"
 import type stringifyLib from "fast-safe-stringify"
 import { createRequire } from "node:module"
 import type {
@@ -42,6 +49,9 @@ export type ParamValue<P extends { [key: string]: unknown }> =
 	| ToJson<P>
 	| FromJson<P>
 
+export type SqlTemplateValues<P extends { [key: string]: unknown }> =
+	ReadonlyArray<ParamValue<P> | SqlContext<P>>
+
 function toSupportedValue(value: unknown): SupportedValueType {
 	if (
 		value === null ||
@@ -57,14 +67,38 @@ function toSupportedValue(value: unknown): SupportedValueType {
 
 export class Sql<P extends { [key: string]: unknown }> {
 	readonly #strings: readonly string[]
-	readonly #paramOperators: ReadonlyArray<ParamValue<P>>
+	readonly #paramOperators: SqlTemplateValues<P>
+
+	#params: P
 
 	constructor(
 		strings: readonly string[],
-		paramOperators: ReadonlyArray<ParamValue<P>>
+		paramOperators: SqlTemplateValues<P>,
+		params: P
 	) {
 		this.#strings = strings
 		this.#paramOperators = paramOperators
+		this.#params = params
+	}
+
+	#contextToSql(context: SqlContext<P>): string {
+		let sql = ""
+
+		// Handle values property if present
+		if (context.values) {
+			const { sql: valuesSql } = buildValuesStatement(
+				context.values,
+				this.#params
+			)
+			sql += valuesSql
+		}
+
+		// Future context properties will be handled here
+		// if (context.where) { ... }
+		// if (context.orderBy) { ... }
+		// etc.
+
+		return sql
 	}
 
 	get sql(): string {
@@ -73,13 +107,18 @@ export class Sql<P extends { [key: string]: unknown }> {
 		for (let i = 0; i < this.#paramOperators.length; i++) {
 			const op = this.#paramOperators[i]
 
-			if (op.endsWith(".toJson")) {
-				result += `json(${op.split(".")[0]}) ${this.#strings[i + 1]}`
-			} else if (op.endsWith(".fromJson")) {
-				const columnName = op.split(".")[0].substring(1)
-				result += `json_extract(${columnName}, '$') ${this.#strings[i + 1]}`
-			} else {
-				result += `${op} ${this.#strings[i + 1]}`
+			if (isSqlContext<P>(op)) {
+				const contextSql = this.#contextToSql(op)
+				result += contextSql + this.#strings[i + 1]
+			} else if (typeof op === "string") {
+				if (op.endsWith(".toJson")) {
+					result += `jsonb(${op.split(".")[0]}) ${this.#strings[i + 1]}`
+				} else if (op.endsWith(".fromJson")) {
+					const columnName = op.split(".")[0].substring(1)
+					result += `json_extract(${columnName}, '$') ${this.#strings[i + 1]}`
+				} else {
+					result += `${op} ${this.#strings[i + 1]}`
+				}
 			}
 		}
 		return result
@@ -105,17 +144,16 @@ export class Sql<P extends { [key: string]: unknown }> {
 		)
 	}
 
-	#toNamedParams(params: P): Record<string, SupportedValueType> {
+	#toNamedParams(): Record<string, SupportedValueType> {
 		const namedParams: Record<string, SupportedValueType> = {}
 
 		for (const op of this.#paramOperators) {
-			// Skip fromJson operations as they don't need parameters
-			if (op.endsWith(".fromJson")) {
+			if (typeof op !== "string" || op.endsWith(".fromJson")) {
 				continue
 			}
 
-			const paramName = op.split(".")[0].substring(1) // Remove $ prefix
-			const value = params[paramName]
+			const paramName = op.split(".")[0].substring(1)
+			const value = this.#params[paramName]
 
 			if (value === undefined) {
 				throw new NodeSqliteError(
@@ -150,14 +188,47 @@ export class Sql<P extends { [key: string]: unknown }> {
 		return namedParams
 	}
 
-	prepare(params: P): {
+	prepare(): {
 		sql: string
 		namedParams: Record<string, SupportedValueType>
 		hasJsonColumns: boolean
 	} {
+		// First collect all SqlContext objects
+		const contexts = this.#paramOperators.filter(
+			(op): op is SqlContext<P> => typeof op === "object" && !Array.isArray(op)
+		)
+
+		// Validate individual contexts first
+		const validationErrors = contexts.flatMap((context) =>
+			validateSqlContext<P>(context)
+		)
+
+		if (validationErrors.length > 0) {
+			throw new NodeSqliteError(
+				"ERR_SQLITE_CONTEXT",
+				SqlitePrimaryResultCode.SQLITE_MISUSE,
+				"Invalid SQL context",
+				validationErrors.map((e) => e.message).join("\n"),
+				undefined
+			)
+		}
+
+		// Then validate the combination of contexts
+		const combinationErrors = validateContextCombination(contexts)
+
+		if (combinationErrors.length > 0) {
+			throw new NodeSqliteError(
+				"ERR_SQLITE_CONTEXT",
+				SqlitePrimaryResultCode.SQLITE_MISUSE,
+				"Invalid SQL context combination",
+				combinationErrors.map((e) => e.message).join("\n"),
+				undefined
+			)
+		}
+
 		return {
 			sql: this.sql,
-			namedParams: this.#toNamedParams(params),
+			namedParams: this.#toNamedParams(),
 			hasJsonColumns: this.hasJsonColumns,
 		}
 	}

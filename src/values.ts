@@ -1,37 +1,35 @@
-// Copyright 2025 Takin Profit. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 import type { InsertOrSetOptions } from "#context"
 import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors"
 import type { DataRow } from "#types"
 
-type BuildValuesResult = {
-	sql: string
+type BuildSqlResult = {
+	columns: string[]
+	placeholders: string[]
 	hasJsonColumns: boolean
 }
 
-export function buildValuesStatement<P extends DataRow>(
-	values: InsertOrSetOptions<P>,
+function buildSqlComponents<P extends DataRow>(
+	options: InsertOrSetOptions<P>,
 	params: P
-): BuildValuesResult {
+): BuildSqlResult {
 	const isValueType = (value: unknown): value is string => {
 		return typeof value === "string"
 	}
 
-	if (values === "*") {
+	if (options === "*") {
 		const columns = Object.keys(params)
 		return {
-			sql: `(${columns.join(", ")}) VALUES (${columns.map((k) => `$${k}`).join(", ")})`,
+			columns,
+			placeholders: columns.map((k) => `$${k}`),
 			hasJsonColumns: false,
 		}
 	}
 
-	if (Array.isArray(values) && values[0] === "*" && values.length === 2) {
+	if (Array.isArray(options) && options[0] === "*" && options.length === 2) {
 		if (
-			!values[1] ||
-			typeof values[1] !== "object" ||
-			!("jsonColumns" in values[1])
+			!options[1] ||
+			typeof options[1] !== "object" ||
+			!("jsonColumns" in options[1])
 		) {
 			throw new NodeSqliteError(
 				"ERR_SQLITE_PARAM",
@@ -43,7 +41,7 @@ export function buildValuesStatement<P extends DataRow>(
 		}
 
 		const jsonColumns = new Set(
-			(values[1] as { jsonColumns: string[] }).jsonColumns
+			(options[1] as { jsonColumns: string[] }).jsonColumns
 		)
 		const columns = Object.keys(params)
 		const existingJsonColumns = [...jsonColumns].filter((col) =>
@@ -54,17 +52,18 @@ export function buildValuesStatement<P extends DataRow>(
 		)
 
 		return {
-			sql: `(${columns.join(", ")}) VALUES (${placeholders.join(", ")})`,
+			columns,
+			placeholders,
 			hasJsonColumns: existingJsonColumns.length > 0,
 		}
 	}
 
-	if (Array.isArray(values)) {
+	if (Array.isArray(options)) {
 		const columns: string[] = []
 		const placeholders: string[] = []
 		let hasJson = false
 
-		for (const op of values) {
+		for (const op of options) {
 			if (!isValueType(op)) {
 				throw new NodeSqliteError(
 					"ERR_SQLITE_PARAM",
@@ -96,17 +95,43 @@ export function buildValuesStatement<P extends DataRow>(
 			}
 		}
 
-		return {
-			sql: `(${columns.join(", ")}) VALUES (${placeholders.join(", ")})`,
-			hasJsonColumns: hasJson,
-		}
+		return { columns, placeholders, hasJsonColumns: hasJson }
 	}
 
 	throw new NodeSqliteError(
 		"ERR_SQLITE_PARAM",
 		SqlitePrimaryResultCode.SQLITE_ERROR,
-		"Invalid values format",
-		"Values must be '*', an array of parameters, or a ValuesWithJsonColumns tuple",
+		"Invalid format",
+		"Must be '*', an array of parameters, or a ValuesWithJsonColumns tuple",
 		undefined
 	)
+}
+
+export function buildValuesStatement<P extends DataRow>(
+	values: InsertOrSetOptions<P>,
+	params: P
+): { sql: string; hasJsonColumns: boolean } {
+	const { columns, placeholders, hasJsonColumns } = buildSqlComponents(
+		values,
+		params
+	)
+	return {
+		sql: `(${columns.join(", ")}) VALUES (${placeholders.join(", ")})`,
+		hasJsonColumns,
+	}
+}
+
+export function buildSetStatement<P extends DataRow>(
+	set: InsertOrSetOptions<P>,
+	params: P
+): { sql: string; hasJsonColumns: boolean } {
+	const { columns, placeholders, hasJsonColumns } = buildSqlComponents(
+		set,
+		params
+	)
+	const setPairs = columns.map((col, i) => `${col} = ${placeholders[i]}`)
+	return {
+		sql: `SET ${setPairs.join(", ")}`,
+		hasJsonColumns,
+	}
 }

@@ -10,7 +10,7 @@ import {
 	validateSqlContext,
 } from "#context"
 import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors"
-import { buildValuesStatement } from "#values"
+import { buildSetStatement, buildValuesStatement } from "#values"
 import type stringifyLib from "fast-safe-stringify"
 import { createRequire } from "node:module"
 import type { Primitive } from "type-fest"
@@ -106,6 +106,11 @@ export class Sql<P extends DataRow> {
 				this.#params
 			)
 			sql += sqlFormatter.format(valuesSql)
+		}
+
+		if (context.set) {
+			const { sql: setSql } = buildSetStatement(context.set, this.#params)
+			sql += sqlFormatter.format(setSql)
 		}
 
 		if (context.where) {

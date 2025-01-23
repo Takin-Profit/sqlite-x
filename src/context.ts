@@ -121,16 +121,33 @@ export function validateSqlContext<P extends DataRow>(
 							path: "returning",
 						})
 					)
-				} else if (
-					Array.isArray(value) &&
-					!value.every((item) => typeof item === "string")
-				) {
-					errors.push(
-						validationErr({
-							msg: "returning array must contain only strings",
-							path: "returning",
-						})
-					)
+				} else if (Array.isArray(value)) {
+					// Check for non-strings
+					if (!value.every((item) => typeof item === "string")) {
+						errors.push(
+							validationErr({
+								msg: "returning array must contain only strings",
+								path: "returning",
+							})
+						)
+					}
+					// Check for duplicates
+					const seen = new Set<string>()
+					const duplicates = value.filter((item) => {
+						if (seen.has(item)) {
+							return true
+						}
+						seen.add(item)
+						return false
+					})
+					if (duplicates.length > 0) {
+						errors.push(
+							validationErr({
+								msg: `Duplicate columns in RETURNING clause: ${duplicates.join(", ")}`,
+								path: "returning",
+							})
+						)
+					}
 				}
 				break
 			}

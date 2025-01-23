@@ -132,6 +132,14 @@ export class Sql<P extends DataRow> {
 			sql += `\nLIMIT -1\nOFFSET ${context.offset}`
 		}
 
+		if (context.returning) {
+			if (context.returning === "*") {
+				sql += "\nRETURNING *"
+			} else if (Array.isArray(context.returning)) {
+				sql += `\nRETURNING ${context.returning.join(", ")}`
+			}
+		}
+
 		return sql
 	}
 

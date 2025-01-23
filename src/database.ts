@@ -31,6 +31,12 @@ import {
 } from "#sql"
 import type { DataRow } from "#types"
 
+export type CleanupPragmas = {
+	optimize?: boolean
+	shrinkMemory?: boolean
+	walCheckpoint?: "PASSIVE" | "FULL" | "RESTART" | "TRUNCATE"
+}
+
 export interface DBOptions {
 	location?: string | ":memory:"
 	statementCache?: boolean | StatementCacheOptions
@@ -275,11 +281,28 @@ export class DB {
 		}
 	}
 
-	close(): void {
-		this.#logger.info("Closing database connection")
-		this.clearStatementCache()
-		this.#db.close()
-		this.#logger.info("Database connection closed")
+	close(pragmas?: CleanupPragmas): void {
+		this.#logger.info("Closing database connection", pragmas)
+
+		try {
+			if (pragmas) {
+				if (pragmas.optimize) {
+					this.#db.exec("PRAGMA optimize;")
+				}
+				if (pragmas.shrinkMemory) {
+					this.#db.exec("PRAGMA shrink_memory;")
+				}
+				if (pragmas.walCheckpoint) {
+					this.#db.exec(`PRAGMA wal_checkpoint(${pragmas.walCheckpoint});`)
+				}
+			}
+		} catch (error) {
+			this.#logger.error("Error executing cleanup pragmas", error)
+		} finally {
+			this.clearStatementCache()
+			this.#db.close()
+			this.#logger.info("Database connection closed")
+		}
 	}
 
 	#configurePragmas(config: PragmaConfig): void {

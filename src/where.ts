@@ -222,3 +222,19 @@ function validateSingleCondition<P extends DataRow>(
 
 	return []
 }
+
+export function buildWhereStatement(where: WhereClause<DataRow>): {
+	sql: string
+} {
+	if (typeof where === "string") {
+		return { sql: `WHERE ${where}` }
+	}
+
+	const conditions = where
+		.map((part, i) => {
+			return i % 2 === 0 ? part : ` ${part} `
+		})
+		.join("")
+
+	return { sql: `WHERE ${conditions}` }
+}

@@ -22,7 +22,8 @@ import type {
 import type { DataRow } from "#types"
 import { buildWhereStatement } from "#where.js"
 import sqlFormatter from "@sqltools/formatter"
-import { buildOrderByStatement } from "#order-by.js"
+import { buildOrderByStatement } from "#order-by"
+import { buildColumnsStatement } from "#columns"
 
 const stringify: typeof stringifyLib = createRequire(import.meta.url)(
 	"fast-safe-stringify"
@@ -95,7 +96,12 @@ export class Sql<P extends DataRow> {
 	#contextToSql(context: SqlContext<P>): string {
 		const parts: string[] = []
 
-		// Values and Set come first
+		// Columns statement comes first
+		if (context.columns) {
+			parts.push(sqlFormatter.format(buildColumnsStatement(context.columns)))
+		}
+
+		// Values and Set come next
 		if (context.values) {
 			parts.push(
 				sqlFormatter.format(
@@ -109,17 +115,13 @@ export class Sql<P extends DataRow> {
 			)
 		}
 
-		// Where comes next
+		// Rest remains the same
 		if (context.where) {
 			parts.push(buildWhereStatement(context.where).sql)
 		}
-
-		// Order By after Where
 		if (context.orderBy) {
 			parts.push(buildOrderByStatement(context.orderBy).sql)
 		}
-
-		// Limit and Offset come last before Returning
 		if (context.limit !== undefined) {
 			parts.push(`LIMIT ${context.limit}`)
 			if (context.offset !== undefined) {
@@ -129,8 +131,6 @@ export class Sql<P extends DataRow> {
 			parts.push("LIMIT -1")
 			parts.push(`OFFSET ${context.offset}`)
 		}
-
-		// Returning is always last
 		if (context.returning) {
 			parts.push(
 				context.returning === "*"
@@ -138,7 +138,6 @@ export class Sql<P extends DataRow> {
 					: `RETURNING ${context.returning.join(", ")}`
 			)
 		}
-
 		return parts.join("\n")
 	}
 

@@ -102,7 +102,8 @@ export function buildColumnsStatement<T extends DataRow>(
 			undefined
 		)
 	}
+
 	return `(\n  ${Object.entries(columns)
 		.map(([name, def]) => `${name} ${String(def).trim()}`)
-		.join(",\n  ")}\n);`
+		.join(",\n  ")}\n)`
 }

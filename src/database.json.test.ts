@@ -13,11 +13,11 @@ beforeEach(() => {
 	db.exec(`
     CREATE TABLE json_test (
       id INTEGER PRIMARY KEY,
-      simple_object JSON,
-      nested_object JSON,
-      array_data JSON,
-      mixed_data JSON,
-      nullable_json JSON
+      simple_object BLOB,
+      nested_object BLOB,
+      array_data BLOB,
+      mixed_data BLOB,
+      nullable_json BLOB
     )
   `)
 })

@@ -81,6 +81,28 @@ export class Sql<P extends { [key: string]: unknown }> {
 		this.#params = params
 	}
 
+	static formatSql(sqlInput: string): string {
+		const depth = 0
+		return `
+     ${sqlInput
+				.replace(/\bSELECT\b/g, "\nSELECT")
+				.replace(/\bFROM\b/g, "\nFROM")
+				.replace(/\bWHERE\b/g, "\nWHERE")
+				.replace(/\bGROUP BY\b/g, "\nGROUP BY")
+				.replace(/\bHAVING\b/g, "\nHAVING")
+				.replace(/\bORDER BY\b/g, "\nORDER BY")
+				.replace(/\bLIMIT\b/g, "\nLIMIT")
+				.replace(/\bVALUES\b/g, "\nVALUES")
+				.replace(/\bINSERT INTO\b/g, "\nINSERT INTO")
+				.replace(/\bUPDATE\b/g, "\nUPDATE")
+				.replace(/\bDELETE FROM\b/g, "\nDELETE FROM")
+				.replace(/([,(])/g, `$1\n${" ".repeat(depth + 2)}`)
+				.replace(/([)])/g, `\n${" ".repeat(Math.max(0, depth - 1))}$1`)}`
+			.trim()
+			.replace(/\s+\n/g, "\n")
+			.replace(/\n\s+/g, "\n  ")
+	}
+
 	#contextToSql(context: SqlContext<P>): string {
 		let sql = ""
 
@@ -90,7 +112,7 @@ export class Sql<P extends { [key: string]: unknown }> {
 				context.values,
 				this.#params
 			)
-			sql += valuesSql
+			sql += Sql.formatSql(valuesSql)
 		}
 
 		// Future context properties will be handled here
@@ -241,11 +263,11 @@ export interface XStatementSync<
 	RET = unknown,
 > {
 	all<R = RET>(params: P): R[]
-	expandedSQL: string
 	iterate<R = RET>(params: P): Iterator<R>
 	get<R = RET>(params: P): R | undefined
 	run(params: P): StatementResultingChanges
-	sourceSQL: string
+	expandedSQL(params: P): string
+	sourceSQL: (params: P) => string
 }
 
 function looksLikeJSON(value: unknown): value is string {
@@ -408,10 +430,10 @@ export function createXStatementSync<
 			}
 		},
 
-		get expandedSQL() {
+		sourceSQL(params: P) {
 			try {
-				const { stmt } = props({} as P)
-				return stmt.expandedSQL
+				const { stmt } = props(params)
+				return stmt.sourceSQL
 			} catch (error) {
 				throw new NodeSqliteError(
 					"ERR_SQLITE_QUERY",
@@ -423,15 +445,15 @@ export function createXStatementSync<
 			}
 		},
 
-		get sourceSQL() {
+		expandedSQL(params: P) {
 			try {
-				const { stmt } = props({} as P)
-				return stmt.sourceSQL
+				const { stmt } = props(params)
+				return stmt.expandedSQL
 			} catch (error) {
 				throw new NodeSqliteError(
 					"ERR_SQLITE_QUERY",
 					SqlitePrimaryResultCode.SQLITE_ERROR,
-					"Failed to get source SQL",
+					"Failed to get expanded SQL",
 					error instanceof Error ? error.message : String(error),
 					error instanceof Error ? error : undefined
 				)

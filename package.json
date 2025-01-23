@@ -19,7 +19,6 @@
   "scripts": {
     "build": "tsup",
     "test": "tsx --test --experimental-sqlite src/**/*.test.ts",
-    "test:fromjson": "tsx --test --experimental-sqlite --test-name-pattern=\"fromJson\" src/**/*.test.ts",
     "test:only": "tsx --test --experimental-sqlite --test-only src/**/*.test.ts"
   },
   "keywords": [

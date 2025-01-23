@@ -23,6 +23,7 @@ import type { DataRow } from "#types"
 import { buildColumnsStatement } from "#columns"
 import { buildWhereStatement } from "#where.js"
 import sqlFormatter from "@sqltools/formatter"
+import { buildOrderByStatement } from "#order-by.js"
 
 const stringify: typeof stringifyLib = createRequire(import.meta.url)(
 	"fast-safe-stringify"
@@ -115,6 +116,10 @@ export class Sql<P extends DataRow> {
 
 		if (context.where) {
 			sql += sqlFormatter.format(buildWhereStatement(context.where).sql)
+		}
+
+		if (context.orderBy) {
+			sql += sqlFormatter.format(buildOrderByStatement(context.orderBy).sql)
 		}
 
 		// Future context properties will be handled here

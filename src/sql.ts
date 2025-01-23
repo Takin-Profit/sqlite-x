@@ -3,22 +3,14 @@
 // license that can be found in the LICENSE file.
 // noinspection t
 
-import {
-	isSqlContext,
-	validateContextCombination,
-	validateSqlContext,
-	type SqlContext,
-} from "#context.js"
-import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors.js"
-import { buildValuesStatement } from "#values.js"
+import {isSqlContext, type SqlContext, validateContextCombination, validateSqlContext,} from "#context"
+import {NodeSqliteError, SqlitePrimaryResultCode} from "#errors"
+import {buildValuesStatement} from "#values"
 import type stringifyLib from "fast-safe-stringify"
-import { createRequire } from "node:module"
-import type { Primitive } from "type-fest"
-import type {
-	StatementResultingChanges,
-	StatementSync,
-	SupportedValueType,
-} from "node:sqlite"
+import {createRequire} from "node:module"
+import type {Primitive} from "type-fest"
+import type {StatementResultingChanges, StatementSync, SupportedValueType,} from "node:sqlite"
+import type {DataRow} from "#types"
 
 const stringify: typeof stringifyLib = createRequire(import.meta.url)(
 	"fast-safe-stringify"
@@ -27,10 +19,7 @@ const stringify: typeof stringifyLib = createRequire(import.meta.url)(
 /**
  * Represents a parameter operator that references a property of type P
  */
-export type ParameterOperator<P extends { [key: string]: unknown }> =
-	`$${keyof P & string}`
-
-type IsNonPrimitive<T> = T extends Primitive ? never : T
+export type ParameterOperator<P extends DataRow> = `$${keyof P & string}`
 
 // Step 2: Get keys of non-primitive values
 type NonPrimitiveKeys<T> = {
@@ -41,25 +30,26 @@ type NonPrimitiveKeys<T> = {
  * Represents a parameter operator that converts a property to JSON
  * Only allows non-primitive values to be converted to JSON
  */
-export type ToJson<P extends { [key: string]: unknown }> =
+export type ToJson<P extends DataRow> =
 	`$${NonPrimitiveKeys<P> & string}${"->json"}`
 
 /**
  * Represents a parameter operator that parses a property from JSON
  * Only allows non-primitive values to be parsed from JSON
  */
-export type FromJson<P extends { [key: string]: unknown }> =
+export type FromJson<P extends DataRow> =
 	`$${NonPrimitiveKeys<P> & string}${"<-json"}` // only supports json_extract
 /**
  * Union type of all possible parameter operators
  */
-export type ParamValue<P extends { [key: string]: unknown }> =
+export type ParamValue<P extends DataRow> =
 	| ParameterOperator<P>
 	| ToJson<P>
 	| FromJson<P>
 
-export type SqlTemplateValues<P extends { [key: string]: unknown }> =
-	ReadonlyArray<ParamValue<P> | SqlContext<P>>
+export type SqlTemplateValues<P extends DataRow> = ReadonlyArray<
+	ParamValue<P> | SqlContext<P>
+>
 
 function toSupportedValue(value: unknown): SupportedValueType {
 	if (
@@ -74,7 +64,7 @@ function toSupportedValue(value: unknown): SupportedValueType {
 	return String(value)
 }
 
-export class Sql<P extends { [key: string]: unknown }> {
+export class Sql<P extends DataRow> {
 	readonly #strings: readonly string[]
 	readonly #paramOperators: SqlTemplateValues<P>
 
@@ -181,6 +171,7 @@ export class Sql<P extends { [key: string]: unknown }> {
 		const namedParams: Record<string, SupportedValueType> = {}
 
 		for (const op of this.#paramOperators) {
+			// noinspection SuspiciousTypeOfGuard
 			if (typeof op !== "string" || op.endsWith("<-json")) {
 				continue
 			}
@@ -305,8 +296,7 @@ export function parseJsonColumns(
 	for (const [key, value] of Object.entries(result)) {
 		if (looksLikeJSON(value)) {
 			try {
-				const data = JSON.parse(value)
-				result[key] = data
+				result[key] = JSON.parse(value)
 			} catch {
 				// Keep original value if parsing fails
 			}
@@ -314,9 +304,7 @@ export function parseJsonColumns(
 	}
 	return result
 }
-type CreateXStatementSyncProps<
-	P extends { [key: string]: unknown } | undefined,
-> = (params: P) => {
+type CreateXStatementSyncProps<P extends DataRow | undefined> = (params: P) => {
 	stmt: StatementSync
 	namedParams: Record<string, SupportedValueType>
 	hasJsonColumns: boolean

@@ -1,7 +1,7 @@
 import { test, beforeEach, afterEach } from "node:test"
 import assert from "node:assert/strict"
-import { DB } from "./database.js"
-import { NodeSqliteError, SqlitePrimaryResultCode } from "./errors.js"
+import { DB } from "./database"
+import { NodeSqliteError, SqlitePrimaryResultCode } from "./errors"
 
 let db: DB
 

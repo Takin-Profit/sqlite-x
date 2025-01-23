@@ -2,15 +2,16 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-import type { InsertOrSetOptions } from "#context.js"
-import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors.js"
+import type { InsertOrSetOptions } from "#context"
+import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors"
+import type { DataRow } from "#types"
 
 type BuildValuesResult = {
 	sql: string
 	hasJsonColumns: boolean
 }
 
-export function buildValuesStatement<P extends { [key: string]: unknown }>(
+export function buildValuesStatement<P extends DataRow>(
 	values: InsertOrSetOptions<P>,
 	params: P
 ): BuildValuesResult {

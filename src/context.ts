@@ -2,32 +2,31 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors.js"
-import type { ToJson, ParameterOperator } from "#sql.js"
+import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors"
+import type { ToJson, ParameterOperator } from "#sql"
 import {
 	COMPARISON_OPERATORS,
+	type DataRow,
 	LOGICAL_OPERATORS,
 	type LogicalOperator,
-} from "#types.js"
-import { validationErr, type ValidationError } from "#validate.js"
-import type { WhereClause } from "#where.js"
+} from "#types"
+import { validationErr, type ValidationError } from "#validate"
+import type { WhereClause } from "#where"
 
-export type ValueType<P extends { [key: string]: unknown }> =
-	| ParameterOperator<P>
-	| ToJson<P>
+export type ValueType<P extends DataRow> = ParameterOperator<P> | ToJson<P>
 
-type ValuesWithJsonColumns<P extends { [key: string]: unknown }> = [
+type ValuesWithJsonColumns<P extends DataRow> = [
 	"*",
 	{ jsonColumns: (keyof P)[] },
 ]
 
-export type InsertOrSetOptions<P extends { [key: string]: unknown }> =
+export type InsertOrSetOptions<P extends DataRow> =
 	| ValueType<P>[]
 	| "*"
 	| ValuesWithJsonColumns<P>
 
 // Core SQL context type
-type SqlContext<P extends { [key: string]: unknown }> = Partial<{
+type SqlContext<P extends DataRow> = Partial<{
 	values: InsertOrSetOptions<P>
 	set: InsertOrSetOptions<P>
 	where: WhereClause<P>
@@ -37,7 +36,7 @@ type SqlContext<P extends { [key: string]: unknown }> = Partial<{
 	returning: (keyof P)[] | "*"
 }>
 
-export function validateSqlContext<P extends { [key: string]: unknown }>(
+export function validateSqlContext<P extends DataRow>(
 	value: unknown
 ): ValidationError[] {
 	const errors: ValidationError[] = []
@@ -138,7 +137,7 @@ export function validateSqlContext<P extends { [key: string]: unknown }>(
 	return errors
 }
 
-function validateInsertOrSetOptions<P extends { [key: string]: unknown }>(
+function validateInsertOrSetOptions<P extends DataRow>(
 	value: unknown
 ): ValidationError[] {
 	if (value === "*") {
@@ -186,7 +185,7 @@ function validateInsertOrSetOptions<P extends { [key: string]: unknown }>(
 	return errors
 }
 
-function validateWhereClause<P extends { [key: string]: unknown }>(
+function validateWhereClause<P extends DataRow>(
 	value: unknown
 ): ValidationError[] {
 	if (typeof value !== "string" && !Array.isArray(value)) {
@@ -284,7 +283,7 @@ function isJsonColumnsObject(
 	)
 }
 
-export function isSqlContext<P extends { [key: string]: unknown }>(
+export function isSqlContext<P extends DataRow>(
 	value: unknown
 ): value is SqlContext<P> {
 	return validateSqlContext<P>(value).length === 0
@@ -298,9 +297,9 @@ type ContextValidationError = {
 	clauses?: string[]
 }
 
-export function validateContextCombination<
-	P extends { [key: string]: unknown },
->(contexts: SqlContext<P>[]): ContextValidationError[] {
+export function validateContextCombination<P extends DataRow>(
+	contexts: SqlContext<P>[]
+): ContextValidationError[] {
 	const errors: ContextValidationError[] = []
 
 	// Track which clauses we've seen
@@ -360,7 +359,7 @@ export function validateContextCombination<
 	return errors
 }
 
-export function combineContexts<P extends { [key: string]: unknown }>(
+export function combineContexts<P extends DataRow>(
 	contexts: SqlContext<P>[]
 ): SqlContext<P> {
 	// First validate the combination

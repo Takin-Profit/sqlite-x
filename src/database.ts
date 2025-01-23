@@ -29,6 +29,7 @@ import {
 	Sql,
 	type SqlTemplateValues,
 } from "#sql"
+import type { DataRow } from "#types"
 
 export interface DBOptions {
 	location?: string | ":memory:"
@@ -41,7 +42,7 @@ export interface DBOptions {
 /**
  * Function type for SQL template literal tag
  */
-export type SqlFn<P extends { [key: string]: unknown }> = (
+export type SqlFn<P extends DataRow> = (
 	strings: TemplateStringsArray,
 	...params: SqlTemplateValues<P>
 ) => Sql<P>
@@ -143,7 +144,7 @@ export class DB {
 		}
 	}
 
-	prepare<P extends { [key: string]: unknown }, R = unknown>(
+	prepare<P extends DataRow, R = unknown>(
 		builder: (ctx: { sql: SqlFn<P> }) => Sql<P>
 	): XStatementSync<P, R> {
 		return createXStatementSync<P, R>((finalParams) => {

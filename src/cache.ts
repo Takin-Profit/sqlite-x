@@ -459,14 +459,14 @@ export function createStatementCache(options?: StatementCacheOptions) {
 		return undefined
 	}
 
-	if (typeof options.maxSize !== "number" || options.maxSize <= 0) {
+	if (options.maxSize <= 0) {
 		// Add runtime validation since we removed schema validation
 		throw new TypeError("maxSize must be a positive number")
 	}
 
 	if (
 		options.maxAge !== undefined &&
-		(typeof options.maxAge !== "number" || options.maxAge <= 0)
+		(options.maxAge <= 0)
 	) {
 		throw new TypeError("maxAge must be a positive number")
 	}

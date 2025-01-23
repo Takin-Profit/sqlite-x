@@ -4,9 +4,9 @@
 
 import { test, describe, beforeEach, afterEach } from "node:test"
 import assert from "node:assert/strict"
-import { buildValuesStatement } from "./values.js"
-import { NodeSqliteError } from "./errors.js"
-import { DB } from "#database.js"
+import { buildValuesStatement } from "./values"
+import { NodeSqliteError } from "./errors"
+import { DB } from "#database"
 
 describe("buildValuesStatement", () => {
 	describe("with '*' values", () => {

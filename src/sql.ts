@@ -20,7 +20,6 @@ import type {
 	SupportedValueType,
 } from "node:sqlite"
 import type { DataRow } from "#types"
-import { buildColumnsStatement } from "#columns"
 import { buildWhereStatement } from "#where.js"
 import sqlFormatter from "@sqltools/formatter"
 import { buildOrderByStatement } from "#order-by.js"
@@ -94,53 +93,53 @@ export class Sql<P extends DataRow> {
 	}
 
 	#contextToSql(context: SqlContext<P>): string {
-		let sql = ""
+		const parts: string[] = []
 
-		if (context.columns) {
-			sql += sqlFormatter.format(buildColumnsStatement(context.columns))
-		}
-
-		// Handle values property if present
+		// Values and Set come first
 		if (context.values) {
-			const { sql: valuesSql } = buildValuesStatement(
-				context.values,
-				this.#params
+			parts.push(
+				sqlFormatter.format(
+					buildValuesStatement(context.values, this.#params).sql
+				)
 			)
-			sql += sqlFormatter.format(valuesSql)
 		}
-
 		if (context.set) {
-			const { sql: setSql } = buildSetStatement(context.set, this.#params)
-			sql += sqlFormatter.format(setSql)
+			parts.push(
+				sqlFormatter.format(buildSetStatement(context.set, this.#params).sql)
+			)
 		}
 
+		// Where comes next
 		if (context.where) {
-			sql += sqlFormatter.format(buildWhereStatement(context.where).sql)
+			parts.push(buildWhereStatement(context.where).sql)
 		}
 
+		// Order By after Where
 		if (context.orderBy) {
-			sql += sqlFormatter.format(buildOrderByStatement(context.orderBy).sql)
+			parts.push(buildOrderByStatement(context.orderBy).sql)
 		}
 
+		// Limit and Offset come last before Returning
 		if (context.limit !== undefined) {
-			sql += `\nLIMIT ${context.limit}`
+			parts.push(`LIMIT ${context.limit}`)
 			if (context.offset !== undefined) {
-				sql += `\nOFFSET ${context.offset}`
+				parts.push(`OFFSET ${context.offset}`)
 			}
 		} else if (context.offset !== undefined) {
-			// If only offset is specified, we need to use LIMIT with max value
-			sql += `\nLIMIT -1\nOFFSET ${context.offset}`
+			parts.push("LIMIT -1")
+			parts.push(`OFFSET ${context.offset}`)
 		}
 
+		// Returning is always last
 		if (context.returning) {
-			if (context.returning === "*") {
-				sql += "\nRETURNING *"
-			} else if (Array.isArray(context.returning)) {
-				sql += `\nRETURNING ${context.returning.join(", ")}`
-			}
+			parts.push(
+				context.returning === "*"
+					? "RETURNING *"
+					: `RETURNING ${context.returning.join(", ")}`
+			)
 		}
 
-		return sql
+		return parts.join("\n")
 	}
 
 	// SQL property update

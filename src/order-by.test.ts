@@ -87,7 +87,7 @@ describe("OrderBy Context SQL Generation", () => {
 
 		assert.equal(
 			query.sourceSQL({}).trim(),
-			"SELECT * FROM users\n        ORDER BY name ASC,\n  age DESC"
+			"SELECT * FROM users\n        ORDER BY name ASC, age DESC"
 		)
 
 		// Verify order

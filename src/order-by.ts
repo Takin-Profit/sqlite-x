@@ -18,20 +18,10 @@ export function buildOrderByStatement<P extends DataRow>(
 		)
 	}
 
-	const orderClauses = Object.entries(orderBy).map(([column, direction]) => {
-		if (direction !== "ASC" && direction !== "DESC") {
-			throw new NodeSqliteError(
-				"ERR_SQLITE_PARAM",
-				SqlitePrimaryResultCode.SQLITE_ERROR,
-				"Invalid sort direction",
-				`Sort direction must be 'ASC' or 'DESC', got '${direction}'`,
-				undefined
-			)
-		}
-		return `${column} ${direction}`
-	})
-
+	const orderClauses = Object.entries(orderBy)
+		.map(([column, direction]) => `${column} ${direction}`)
+		.join(", ")
 	return {
-		sql: `ORDER BY ${orderClauses.join(", ")}`,
+		sql: `ORDER BY ${orderClauses}`,
 	}
 }

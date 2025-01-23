@@ -76,7 +76,7 @@ test("buildColumnsStatement generates correct SQL DDL", () => {
 	const sql = buildColumnsStatement(columns)
 	assert.equal(
 		sql,
-		"(\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  name TEXT NOT NULL,\n  active INTEGER DEFAULT 1,\n  metadata BLOB\n)"
+		"(\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  name TEXT NOT NULL,\n  active INTEGER DEFAULT 1,\n  metadata BLOB\n);"
 	)
 })
 
@@ -96,7 +96,7 @@ test("buildColumnsStatement handles complex constraints", () => {
 	const sql = buildColumnsStatement(columns)
 	assert.equal(
 		sql,
-		"(\n  id INTEGER PRIMARY KEY CHECK (id > 0) NOT NULL,\n  ref INTEGER FOREIGN KEY REFERENCES users (id),\n  code TEXT UNIQUE DEFAULT 'none'\n)"
+		"(\n  id INTEGER PRIMARY KEY CHECK (id > 0) NOT NULL,\n  ref INTEGER FOREIGN KEY REFERENCES users (id),\n  code TEXT UNIQUE DEFAULT 'none'\n);"
 	)
 })
 
@@ -126,7 +126,6 @@ describe("Columns Context SQL Generation", () => {
 	afterEach(() => {
 		db.close()
 	})
-
 	test("generates CREATE TABLE with column definitions", () => {
 		interface TestTable {
 			id: number
@@ -150,7 +149,7 @@ describe("Columns Context SQL Generation", () => {
 
 		assert.equal(
 			stmt.sourceSQL({} as TestTable).trim(),
-			"CREATE TABLE test_table (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  name TEXT NOT NULL,\n  active INTEGER DEFAULT 1,\n  data BLOB\n)"
+			"CREATE TABLE test_table (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  name TEXT NOT NULL,\n  active INTEGER DEFAULT 1,\n  data BLOB\n);"
 		)
 	})
 

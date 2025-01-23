@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+import type { Columns } from "#columns.js"
 import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors"
 import type { ToJson, ParameterOperator } from "#sql"
 import {
@@ -34,6 +35,7 @@ type SqlContext<P extends DataRow> = Partial<{
 	limit: number
 	offset: number
 	returning: (keyof P)[] | "*"
+	columns: Columns<P>
 }>
 
 export function validateSqlContext<P extends DataRow>(

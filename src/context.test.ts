@@ -68,7 +68,7 @@ describe("SQL Context Validation", async () => {
 
 		test("accepts toJson operators", () => {
 			const context: SqlContext<TestUser> = {
-				values: ["$metadata.toJson"],
+				values: ["$metadata->json"],
 			}
 			const errors = validateSqlContext<TestUser>(context)
 			assert.equal(errors.length, 0)
@@ -233,7 +233,7 @@ describe("SQL Context Validation", async () => {
 	describe("Complex Scenarios", () => {
 		test("accepts valid complex context", () => {
 			const context: SqlContext<TestUser> = {
-				values: ["$name", "$age", "$metadata.toJson"],
+				values: ["$name", "$age", "$metadata->json"],
 				where: ["age != $createdAt", "AND", "isActive > $age"],
 				orderBy: { name: "ASC", createdAt: "DESC" },
 				limit: 10,

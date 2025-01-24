@@ -4,7 +4,7 @@
 
 import { validateColumns, type Columns } from "#columns.js"
 import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors"
-import type { ToJson, ParameterOperator } from "#sql"
+import type { ToJson, ParameterOperator, FromJson } from "#sql"
 import type { DataRow } from "#types"
 import { validationErr, type ValidationError } from "#validate"
 import { validateWhereClause, type WhereClause } from "#where"
@@ -23,6 +23,7 @@ export type InsertOrSetOptions<P extends DataRow> =
 
 // Core SQL context type
 type SqlContext<P extends DataRow> = Partial<{
+	cols: (keyof P | FromJson<P> | ToJson<P>)[] | "*"
 	values: InsertOrSetOptions<P>
 	set: InsertOrSetOptions<P>
 	where: WhereClause<P>
@@ -51,11 +52,43 @@ export function validateSqlContext<P extends DataRow>(
 				const valueErrors = validateInsertOrSetOptions<P>(context[key])
 				if (valueErrors.length > 0) {
 					errors.push(
-						...valueErrors.map((err) => ({
+						...valueErrors.map(err => ({
 							...err,
 							path: `${key}${err.path ? `.${err.path}` : ""}`,
 						}))
 					)
+				}
+				break
+			}
+			case "cols": {
+				const value = context[key]
+				if (value !== "*" && !Array.isArray(value)) {
+					errors.push(
+						validationErr({
+							msg: "cols must be '*' or an array",
+							path: "cols",
+						})
+					)
+				} else if (Array.isArray(value)) {
+					if (!value.every(item => typeof item === "string")) {
+						errors.push(
+							validationErr({
+								msg: "cols array must contain only strings",
+								path: "cols",
+							})
+						)
+					}
+					// Validate format of each column spec
+					value.forEach((col, index) => {
+						if (!isValidColumnSpec(col)) {
+							errors.push(
+								validationErr({
+									msg: "Invalid column format",
+									path: `cols[${index}]`,
+								})
+							)
+						}
+					})
 				}
 				break
 			}
@@ -66,7 +99,7 @@ export function validateSqlContext<P extends DataRow>(
 				)
 				if (whereErrors.length > 0) {
 					errors.push(
-						...whereErrors.map((err) => ({
+						...whereErrors.map(err => ({
 							...err,
 							path: `where${err.path ? `.${err.path}` : ""}`,
 						}))
@@ -79,7 +112,7 @@ export function validateSqlContext<P extends DataRow>(
 				const orderErrors = validateOrderByClause(context[key])
 				if (orderErrors.length > 0) {
 					errors.push(
-						...orderErrors.map((err) => ({
+						...orderErrors.map(err => ({
 							...err,
 							path: `orderBy${err.path ? `.${err.path}` : ""}`,
 						}))
@@ -103,7 +136,7 @@ export function validateSqlContext<P extends DataRow>(
 				const columnErrors = validateColumns<P>(context[key])
 				if (columnErrors.length > 0) {
 					errors.push(
-						...columnErrors.map((err) => ({
+						...columnErrors.map(err => ({
 							...err,
 							path: `columns${err.path ? `.${err.path}` : ""}`,
 						}))
@@ -123,7 +156,7 @@ export function validateSqlContext<P extends DataRow>(
 					)
 				} else if (Array.isArray(value)) {
 					// Check for non-strings
-					if (!value.every((item) => typeof item === "string")) {
+					if (!value.every(item => typeof item === "string")) {
 						errors.push(
 							validationErr({
 								msg: "returning array must contain only strings",
@@ -133,7 +166,7 @@ export function validateSqlContext<P extends DataRow>(
 					}
 					// Check for duplicates
 					const seen = new Set<string>()
-					const duplicates = value.filter((item) => {
+					const duplicates = value.filter(item => {
 						if (seen.has(item)) {
 							return true
 						}
@@ -163,6 +196,15 @@ export function validateSqlContext<P extends DataRow>(
 	}
 
 	return errors
+}
+
+function isValidColumnSpec(value: string): boolean {
+	return (
+		!value.includes(" ") && // No spaces allowed
+		(value.endsWith("->json") ||
+			value.endsWith("<-json") ||
+			!value.includes("->")) // Basic column or JSON operation
+	)
 }
 
 function validateInsertOrSetOptions<P extends DataRow>(
@@ -253,7 +295,7 @@ function isJsonColumnsObject(
 		"jsonColumns" in value &&
 		Array.isArray((value as { jsonColumns: unknown }).jsonColumns) &&
 		(value as { jsonColumns: unknown[] }).jsonColumns.every(
-			(col) => typeof col === "string"
+			col => typeof col === "string"
 		)
 	)
 }
@@ -344,7 +386,7 @@ export function combineContexts<P extends DataRow>(
 			"ERR_SQLITE_CONTEXT",
 			SqlitePrimaryResultCode.SQLITE_MISUSE,
 			"Invalid SQL context combination",
-			errors.map((e) => e.message).join("\n"),
+			errors.map(e => e.message).join("\n"),
 			undefined
 		)
 	}
@@ -415,4 +457,41 @@ export function combineContexts<P extends DataRow>(
 		},
 		{} as SqlContext<P>
 	)
+}
+
+export function buildColsStatement<P extends DataRow>(
+	cols: (keyof P | FromJson<P> | ToJson<P>)[] | "*"
+): { sql: string; hasJsonColumns: boolean } {
+	if (cols === "*") {
+		return {
+			sql: "SELECT *",
+			hasJsonColumns: false,
+		}
+	}
+
+	const columnsList = cols.map(col => {
+		if (typeof col === "string") {
+			if (col.endsWith("->json")) {
+				const columnName = col.split("->")[0]
+				return `jsonb(${columnName})`
+			}
+			if (col.endsWith("<-json")) {
+				const columnName = col.split("<-")[0]
+				return `json_extract(${columnName}, '$')`
+			}
+			return col
+		}
+		return String(col)
+	})
+
+	const hasJsonColumns = cols.some(
+		col =>
+			typeof col === "string" &&
+			(col.endsWith("->json") || col.endsWith("<-json"))
+	)
+
+	return {
+		sql: `SELECT ${columnsList.join(", ")}`,
+		hasJsonColumns,
+	}
 }

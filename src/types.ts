@@ -37,8 +37,9 @@ export type SqlFn<P extends DataRow> = (
 
 export interface IDatabase {
 	prepareStatement(sql: string): StatementSync
-	prepare<P extends DataRow, R = unknown>(
-		builder: (sql: SqlFn<P>) => Sql<P>
+	sql<P extends DataRow, R = unknown>(
+		strings: TemplateStringsArray,
+		...params: SqlTemplateValues<P>
 	): XStatementSync<P, R>
 	exec(sql: string): void
 	backup(filename: string): void

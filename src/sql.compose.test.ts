@@ -93,7 +93,7 @@ test("preserves SQL context validation", () => {
 				// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 			} as any
 		}`
-		query.sourceSQL({})
+		query.sourceSQL()
 	}, isNodeSqliteError)
 })
 

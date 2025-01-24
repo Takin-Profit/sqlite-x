@@ -49,8 +49,8 @@ describe("SQLite Pragma Configuration", async () => {
 		const statements = getPragmaStatements(PragmaDefaults.development)
 
 		assert(statements.length > 0)
-		assert(statements.every((stmt) => stmt.startsWith("PRAGMA ")))
-		assert(statements.every((stmt) => stmt.endsWith(";")))
+		assert(statements.every(stmt => stmt.startsWith("PRAGMA ")))
+		assert(statements.every(stmt => stmt.endsWith(";")))
 
 		// Check specific development settings
 		assert(statements.includes("PRAGMA journal_mode=WAL;"))

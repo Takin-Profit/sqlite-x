@@ -385,7 +385,7 @@ describe("Where Context SQL Generation", () => {
 		>`SELECT * FROM test_data ${{ where: "metadata IS NULL" }}`
 
 		assert.equal(
-			stmt.sourceSQL({}).trim(),
+			stmt.sourceSQL().trim(),
 			"SELECT *\nFROM test_data\nWHERE metadata IS NULL"
 		)
 	})

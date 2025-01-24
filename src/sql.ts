@@ -343,22 +343,22 @@ export class Sql<P extends DataRow> {
  */
 export interface XStatementSync<P extends DataRow, RET = unknown> {
 	/** Execute query and return all result rows */
-	all<R = RET>(params: P): R[]
+	all<R = RET>(params?: P): R[]
 
 	/** Execute query and return an iterator over result rows */
-	iterate<R = RET>(params: P): Iterator<R>
+	iterate<R = RET>(params?: P): Iterator<R>
 
 	/** Execute query and return first result row or undefined */
-	get<R = RET>(params: P): R | undefined
+	get<R = RET>(params?: P): R | undefined
 
 	/** Execute query and return statement result info */
-	run(params: P): StatementResultingChanges
+	run(params?: P): StatementResultingChanges
 
 	/** Get SQL with parameters expanded */
-	expandedSQL(params: P): string
+	expandedSQL(params?: P): string
 
 	/** Get original SQL source */
-	sourceSQL: (params: P) => string
+	sourceSQL: (params?: P) => string
 
 	/** Chain another SQL template literal */
 	sql(
@@ -415,7 +415,7 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 	props: CreateXStatementSyncProps<P>
 ): XStatementSync<P, RET> {
 	return {
-		all<R = RET>(params: P) {
+		all<R = RET>(params: P = {} as P) {
 			try {
 				const { stmt, namedParams, hasJsonColumns } = props.build(params)
 				const results = stmt.all(namedParams)
@@ -451,7 +451,7 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 			}
 		},
 
-		get<R = RET>(params: P) {
+		get<R = RET>(params: P = {} as P) {
 			try {
 				const { stmt, namedParams, hasJsonColumns } = props.build(params)
 				const row = stmt.get(namedParams)
@@ -476,7 +476,7 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 			}
 		},
 
-		run(params: P) {
+		run(params: P = {} as P) {
 			try {
 				const { stmt, namedParams } = props.build(params)
 				return stmt.run(namedParams)
@@ -491,7 +491,7 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 			}
 		},
 
-		iterate<R = RET>(params: P) {
+		iterate<R = RET>(params: P = {} as P) {
 			try {
 				const { stmt, namedParams, hasJsonColumns } = props.build(params)
 				// @ts-expect-error -- @types/node types are incomplete
@@ -521,7 +521,7 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 			}
 		},
 
-		sourceSQL(params: P) {
+		sourceSQL(params: P = {} as P) {
 			try {
 				const { stmt } = props.build(params)
 				return stmt.sourceSQL
@@ -536,7 +536,7 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 			}
 		},
 
-		expandedSQL(params: P) {
+		expandedSQL(params: P = {} as P) {
 			try {
 				const { stmt } = props.build(params)
 				return stmt.expandedSQL

@@ -35,7 +35,7 @@ describe("buildOrderByStatement", () => {
 
 	test("throws on empty orderBy", () => {
 		assert.throws(
-			() => buildOrderByStatement({}),
+			() => buildOrderByStatement(),
 			(err: unknown) => {
 				assert(err instanceof NodeSqliteError)
 				assert(err.message.includes("must be a non-empty object"))
@@ -79,10 +79,10 @@ describe("OrderBy Context SQL Generation", () => {
         ${{ orderBy: { name: "ASC", age: "DESC" } }}
       `
 
-		const results = query.all<{ name: string; age: number }>({})
+		const results = query.all<{ name: string; age: number }>()
 
 		assert.equal(
-			query.sourceSQL({}).trim(),
+			query.sourceSQL().trim(),
 			"SELECT *\nFROM users\nORDER BY name ASC,\n  age DESC"
 		)
 

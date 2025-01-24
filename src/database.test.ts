@@ -81,7 +81,7 @@ test("handles syntax errors", () => {
 	const query = db.sql<Record<string, never>>`SELEC * FORM users`
 
 	assert.throws(
-		() => query.all({}), // Execute the query to trigger the error
+		() => query.all(), // Execute the query to trigger the error
 		error =>
 			error instanceof NodeSqliteError &&
 			NodeSqliteError.fromNodeSqlite(error).getPrimaryResultCode() ===

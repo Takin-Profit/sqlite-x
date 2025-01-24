@@ -51,7 +51,7 @@ test("handles simple object JSON storage and retrieval", { only: true }, () => {
       FROM json_test
     `
 
-	const result = getData.all<{ data: SimpleObject }>({})
+	const result = getData.all<{ data: SimpleObject }>()
 	assert.deepEqual(result[0].data, simpleObject)
 })
 
@@ -108,7 +108,7 @@ test("handles nested object JSON storage and retrieval", () => {
       FROM json_test
     `
 
-	const result = getData.all<{ data: NestedObject }>({})
+	const result = getData.all<{ data: NestedObject }>()
 	assert.deepEqual(result[0].data, nestedObject)
 })
 
@@ -210,7 +210,7 @@ test("handles JSON path queries", () => {
 		version: string
 		second_user_theme: string
 		feature_flag: number
-	}>({})
+	}>()
 
 	assert.deepEqual(result[0].data, data)
 	assert.strictEqual(result[0].first_user_name, "John")
@@ -279,7 +279,7 @@ test("handles array of objects with mixed types", () => {
 		first_tag: string
 		view_count: number
 		is_active: number
-	}>({})
+	}>()
 
 	assert.deepEqual(result[0].full_data, testData)
 	assert.strictEqual(result[0].first_tag, "important")
@@ -326,7 +326,7 @@ test("handles null and empty JSON values", () => {
 		null_value: null
 		empty_object: Record<string, never>
 		empty_array: never[]
-	}>({})
+	}>()
 
 	assert.deepEqual(result[0].data, testData)
 	assert.strictEqual(result[0].missing_value, null)
@@ -385,7 +385,7 @@ test("handles JSON updates", () => {
       FROM json_test
     `
 
-	const result = getData.all<{ data: UpdateData }>({})
+	const result = getData.all<{ data: UpdateData }>()
 	assert.deepEqual(result[0].data, updatedData)
 })
 
@@ -431,7 +431,7 @@ test("handles nested JSON array operations", () => {
 		data: NestedArrayData
 		center_value: number
 		nested_value: string
-	}>({})
+	}>()
 
 	assert.deepEqual(result[0].data, testData)
 	assert.strictEqual(result[0].center_value, 5)
@@ -470,7 +470,7 @@ test("handles fromJson when querying stored JSON data", () => {
     FROM json_test`
 
 	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-	const result = getUser.all<any>({})
+	const result = getUser.all<any>()
 	assert.deepEqual(result[0].user_data, userData)
 })
 
@@ -523,7 +523,7 @@ test("handles fromJson with nested JSON fields", () => {
     FROM json_test
 `
 	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-	const result = getData.all<any>({})
+	const result = getData.all<any>()
 	assert.deepEqual(result[0].full_data, testData)
 	assert.deepEqual(result[0].tags, ["test", "json"])
 	assert.deepEqual(result[0].flags, {
@@ -571,7 +571,7 @@ test("handles mixed query with multiple fromJson operations", () => {
     FROM json_test`
 
 	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-	const result = getData.all<any>({})
+	const result = getData.all<any>()
 	assert.deepEqual(result[0].profile, profile)
 	assert.deepEqual(result[0].metadata, metadata)
 })

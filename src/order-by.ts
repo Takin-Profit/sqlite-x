@@ -6,7 +6,7 @@ import type { DataRow } from "#types"
 import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors"
 
 export function buildOrderByStatement<P extends DataRow>(
-	orderBy: Partial<Record<keyof P, "ASC" | "DESC">>
+	orderBy?: Partial<Record<keyof P, "ASC" | "DESC">>
 ): string {
 	if (!orderBy || Object.keys(orderBy).length === 0) {
 		throw new NodeSqliteError(

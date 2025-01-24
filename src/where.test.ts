@@ -331,7 +331,7 @@ describe("Where Context SQL Generation", () => {
 					id: 1,
 				})
 				.trim(),
-			"SELECT * FROM test_data WHERE id = $id"
+			"SELECT *\nFROM test_data\nWHERE id = $id"
 		)
 	})
 
@@ -349,7 +349,7 @@ describe("Where Context SQL Generation", () => {
 					active: true,
 				})
 				.trim(),
-			"SELECT * FROM test_data WHERE age > $min_age AND active = $active"
+			"SELECT *\nFROM test_data\nWHERE age > $min_age\n  AND active = $active"
 		)
 	})
 
@@ -378,7 +378,7 @@ describe("Where Context SQL Generation", () => {
 					active: true,
 				})
 				.trim(),
-			"SELECT * FROM test_data WHERE age > $min_age AND name LIKE $pattern OR active = $active"
+			"SELECT *\nFROM test_data\nWHERE age > $min_age\n  AND name LIKE $pattern\n  OR active = $active"
 		)
 	})
 
@@ -389,7 +389,7 @@ describe("Where Context SQL Generation", () => {
 
 		assert.equal(
 			stmt.sourceSQL({}).trim(),
-			"SELECT * FROM test_data WHERE metadata IS NULL"
+			"SELECT *\nFROM test_data\nWHERE metadata IS NULL"
 		)
 	})
 
@@ -412,7 +412,7 @@ describe("Where Context SQL Generation", () => {
 					},
 				})
 				.trim(),
-			"SELECT * FROM test_data WHERE age > $min_age AND settings = jsonb($settings)"
+			"SELECT *\nFROM test_data\nWHERE age > $min_age\n  AND settings = jsonb($settings)"
 		)
 	})
 })

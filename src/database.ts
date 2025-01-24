@@ -2,6 +2,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// Copyright 2025 Takin Profit. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 import { DatabaseSync, type StatementSync } from "node:sqlite"
 import {
 	NodeSqliteError,
@@ -157,16 +161,20 @@ export class DB {
 		strings: TemplateStringsArray,
 		...params: SqlTemplateValues<P>
 	) {
-		return createXStatementSync<P, R>(finalParams => {
-			const { sql, namedParams, hasJsonColumns } = new Sql<P>(
-				strings,
-				params,
-				finalParams,
-				this.#formatConfig
-			).prepare()
-			const stmt = this.prepareStatement(sql)
-
-			return { stmt, namedParams, hasJsonColumns }
+		const builder = new Sql<P>({
+			strings,
+			paramOperators: params,
+			formatterConfig: this.#formatConfig,
+		})
+		return createXStatementSync<P, R>({
+			build: finalParams => {
+				const { sql, namedParams, hasJsonColumns } =
+					builder.prepare(finalParams)
+				const stmt = this.prepareStatement(sql)
+				return { stmt, namedParams, hasJsonColumns }
+			},
+			prepare: sql => this.prepareStatement(sql),
+			sql: builder,
 		})
 	}
 

@@ -1,6 +1,10 @@
 // Copyright 2025 Takin Profit. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+
+// Copyright 2025 Takin Profit. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
 // noinspection t
 
 import {
@@ -86,35 +90,49 @@ export type FormatterConfig =
 			linesBetweenQueries?: number | "preserve"
 	  }
 
+export type SqlOptions<P extends DataRow> = {
+	strings: readonly string[]
+	paramOperators: SqlTemplateValues<P>
+	formatterConfig?: FormatterConfig
+	generatedSql?: string
+}
+
 export class Sql<P extends DataRow> {
-	readonly #strings: readonly string[]
-	readonly #paramOperators: SqlTemplateValues<P>
+	readonly strings: readonly string[]
+	readonly paramOperators: SqlTemplateValues<P>
 
-	readonly #formatterConfig?: Config | false
+	readonly formatterConfig?: Readonly<Config> | false
+	#generatedSql = ""
 
-	#params: P
+	#params: P = {} as P
 
-	constructor(
-		strings: readonly string[],
-		paramOperators: SqlTemplateValues<P>,
-		params: P,
-		formatterConfig: FormatterConfig = {
-			indent: "  ",
-			reservedWordCase: "upper",
-			linesBetweenQueries: 1,
+	constructor({
+		strings,
+		paramOperators,
+		generatedSql,
+		formatterConfig,
+	}: SqlOptions<P>) {
+		this.strings = strings
+		this.paramOperators = paramOperators
+
+		if (formatterConfig === false) {
+			this.formatterConfig = false
+		} else {
+			this.formatterConfig = {
+				indent: "  ",
+				reservedWordCase: "upper",
+				linesBetweenQueries: 1,
+				...formatterConfig,
+				language: "sql",
+			}
 		}
-	) {
-		this.#strings = strings
-		this.#paramOperators = paramOperators
-		this.#params = params
-		this.#formatterConfig = formatterConfig
-			? { ...formatterConfig, language: "sql" }
-			: false
+
+		this.#generatedSql = generatedSql ? `${generatedSql} ` : ""
 	}
 
 	#fmt(sql: string): string {
-		if (this.#formatterConfig) {
-			return sqlFormatter.format(sql, this.#formatterConfig)
+		if (this.formatterConfig) {
+			return sqlFormatter.format(sql, this.formatterConfig)
 		}
 		return sql
 	}
@@ -124,17 +142,15 @@ export class Sql<P extends DataRow> {
 
 		// Columns statement comes first
 		if (context.columns) {
-			parts.push(this.#fmt(buildColumnsStatement(context.columns)))
+			parts.push(buildColumnsStatement(context.columns))
 		}
 
 		// Values and Set come next
 		if (context.values) {
-			parts.push(
-				this.#fmt(buildValuesStatement(context.values, this.#params).sql)
-			)
+			parts.push(buildValuesStatement(context.values, this.#params).sql)
 		}
 		if (context.set) {
-			parts.push(this.#fmt(buildSetStatement(context.set, this.#params).sql))
+			parts.push(buildSetStatement(context.set, this.#params).sql)
 		}
 
 		// Rest remains the same
@@ -165,27 +181,30 @@ export class Sql<P extends DataRow> {
 
 	// SQL property update
 	get sql(): string {
-		let result = this.#strings[0]
+		// Start with any previously generated SQL
+		let result = this.#generatedSql
 
-		for (let i = 0; i < this.#paramOperators.length; i++) {
-			const op = this.#paramOperators[i]
+		// Add the first string segment of the current template
+		result += this.strings[0]
+		for (let i = 0; i < this.paramOperators.length; i++) {
+			const op = this.paramOperators[i]
 
 			if (isSqlContext<P>(op)) {
 				const contextSql = this.#contextToSql(op)
-				result += contextSql + this.#strings[i + 1]
+				result += contextSql + this.strings[i + 1]
 			} else if (typeof op === "string") {
 				if (op.endsWith("->json")) {
 					const columnName = op.split("->")[0]
-					result += `jsonb(${columnName}) ${this.#strings[i + 1]}`
+					result += `jsonb(${columnName}) ${this.strings[i + 1]}`
 				} else if (op.endsWith("<-json")) {
 					const columnName = op.split("<-")[0].substring(1)
-					result += `json_extract(${columnName}, '$') ${this.#strings[i + 1]}`
+					result += `json_extract(${columnName}, '$') ${this.strings[i + 1]}`
 				} else {
-					result += `${op} ${this.#strings[i + 1]}`
+					result += `${op} ${this.strings[i + 1]}`
 				}
 			}
 		}
-		return result
+		return this.#fmt(result.trim())
 	}
 
 	get hasJsonColumns(): boolean {
@@ -211,7 +230,7 @@ export class Sql<P extends DataRow> {
 	#toNamedParams(): Record<string, SupportedValueType> {
 		const namedParams: Record<string, SupportedValueType> = {}
 
-		for (const op of this.#paramOperators) {
+		for (const op of this.paramOperators) {
 			// noinspection SuspiciousTypeOfGuard
 			if (typeof op !== "string" || op.endsWith("<-json")) {
 				continue
@@ -253,29 +272,18 @@ export class Sql<P extends DataRow> {
 		return namedParams
 	}
 
-	concat(
-		strings: TemplateStringsArray,
-		...params: SqlTemplateValues<P>
-	): Sql<P> {
-		return new Sql(
-			[...this.#strings, ...strings],
-			[...this.#paramOperators, ...params],
-			this.#params,
-			this.#formatterConfig
-		)
-	}
-
-	prepare(): {
+	// In Sql class
+	prepare(params: P): {
 		sql: string
 		namedParams: Record<string, SupportedValueType>
 		hasJsonColumns: boolean
 	} {
-		// First collect all SqlContext objects
-		const contexts = this.#paramOperators.filter(
+		this.#params = params
+
+		const contexts = this.paramOperators.filter(
 			(op): op is SqlContext<P> => typeof op === "object" && !Array.isArray(op)
 		)
 
-		// Validate individual contexts first
 		const validationErrors = contexts.flatMap(context =>
 			validateSqlContext<P>(context)
 		)
@@ -290,7 +298,6 @@ export class Sql<P extends DataRow> {
 			)
 		}
 
-		// Then validate the combination of contexts
 		const combinationErrors = validateContextCombination(contexts)
 
 		if (combinationErrors.length > 0) {
@@ -313,16 +320,17 @@ export class Sql<P extends DataRow> {
 /**
  * Interface for prepared statements with type safety
  */
-export interface XStatementSync<
-	P extends Record<string, unknown> | undefined,
-	RET = unknown,
-> {
+export interface XStatementSync<P extends DataRow, RET = unknown> {
 	all<R = RET>(params: P): R[]
 	iterate<R = RET>(params: P): Iterator<R>
 	get<R = RET>(params: P): R | undefined
 	run(params: P): StatementResultingChanges
 	expandedSQL(params: P): string
 	sourceSQL: (params: P) => string
+	sql(
+		strings: TemplateStringsArray,
+		...params: SqlTemplateValues<P>
+	): XStatementSync<P, RET>
 }
 
 function looksLikeJSON(value: unknown): value is string {
@@ -340,9 +348,7 @@ function looksLikeJSON(value: unknown): value is string {
 /**
  * Helper function to parse JSON columns in result rows
  */
-export function parseJsonColumns(
-	row: Record<string, unknown>
-): Record<string, unknown> {
+export function parseJsonColumns(row: DataRow): DataRow {
 	const result = { ...row }
 
 	// Handle every field in the row that's a string and try to parse it
@@ -357,24 +363,27 @@ export function parseJsonColumns(
 	}
 	return result
 }
-type CreateXStatementSyncProps<P extends DataRow | undefined> = (params: P) => {
-	stmt: StatementSync
-	namedParams: Record<string, SupportedValueType>
-	hasJsonColumns: boolean
+type CreateXStatementSyncProps<P extends DataRow> = {
+	build: (params: P) => {
+		stmt: StatementSync
+		namedParams: Record<string, SupportedValueType>
+		hasJsonColumns: boolean
+	}
+	prepare: (sql: string) => StatementSync
+	sql: Sql<P>
 }
 
 /**
  * Creates a type-safe prepared statement
  */
 // Update the factory function
-export function createXStatementSync<
-	P extends Record<string, unknown> | undefined,
-	RET = unknown,
->(props: CreateXStatementSyncProps<P>): XStatementSync<P, RET> {
+export function createXStatementSync<P extends DataRow, RET = unknown>(
+	props: CreateXStatementSyncProps<P>
+): XStatementSync<P, RET> {
 	return {
 		all<R = RET>(params: P) {
 			try {
-				const { stmt, namedParams, hasJsonColumns } = props(params)
+				const { stmt, namedParams, hasJsonColumns } = props.build(params)
 				const results = stmt.all(namedParams)
 				if (!results || !results.length) {
 					// No results case
@@ -387,14 +396,12 @@ export function createXStatementSync<
 
 				if (Array.isArray(results)) {
 					// Array results case
-					return results.map(row =>
-						parseJsonColumns(row as Record<string, unknown>)
-					) as R
+					return results.map(row => parseJsonColumns(row as DataRow)) as R
 				}
 
 				if (typeof results === "object") {
 					// Single object result case
-					return parseJsonColumns(results as Record<string, unknown>) as R
+					return parseJsonColumns(results as DataRow) as R
 				}
 
 				// Primitive value case
@@ -412,7 +419,7 @@ export function createXStatementSync<
 
 		get<R = RET>(params: P) {
 			try {
-				const { stmt, namedParams, hasJsonColumns } = props(params)
+				const { stmt, namedParams, hasJsonColumns } = props.build(params)
 				const row = stmt.get(namedParams)
 
 				if (!row) {
@@ -423,7 +430,7 @@ export function createXStatementSync<
 					return row as R
 				}
 
-				return parseJsonColumns(row as Record<string, unknown>) as R
+				return parseJsonColumns(row as DataRow) as R
 			} catch (error) {
 				throw new NodeSqliteError(
 					"ERR_SQLITE_QUERY",
@@ -437,7 +444,7 @@ export function createXStatementSync<
 
 		run(params: P) {
 			try {
-				const { stmt, namedParams } = props(params)
+				const { stmt, namedParams } = props.build(params)
 				return stmt.run(namedParams)
 			} catch (error) {
 				throw new NodeSqliteError(
@@ -452,7 +459,7 @@ export function createXStatementSync<
 
 		iterate<R = RET>(params: P) {
 			try {
-				const { stmt, namedParams, hasJsonColumns } = props(params)
+				const { stmt, namedParams, hasJsonColumns } = props.build(params)
 				// @ts-expect-error -- @types/node types are incomplete
 				const baseIterator = stmt.iterate(namedParams)
 				return {
@@ -464,9 +471,7 @@ export function createXStatementSync<
 						return {
 							done: false,
 							value: hasJsonColumns
-								? (parseJsonColumns(
-										result.value as Record<string, unknown>
-									) as R)
+								? (parseJsonColumns(result.value as DataRow) as R)
 								: (result.value as R),
 						}
 					},
@@ -484,7 +489,7 @@ export function createXStatementSync<
 
 		sourceSQL(params: P) {
 			try {
-				const { stmt } = props(params)
+				const { stmt } = props.build(params)
 				return stmt.sourceSQL
 			} catch (error) {
 				throw new NodeSqliteError(
@@ -499,7 +504,7 @@ export function createXStatementSync<
 
 		expandedSQL(params: P) {
 			try {
-				const { stmt } = props(params)
+				const { stmt } = props.build(params)
 				return stmt.expandedSQL
 			} catch (error) {
 				throw new NodeSqliteError(
@@ -510,6 +515,28 @@ export function createXStatementSync<
 					error instanceof Error ? error : undefined
 				)
 			}
+		},
+
+		sql(strings: TemplateStringsArray, ...params: SqlTemplateValues<P>) {
+			const newBuilder = new Sql({
+				strings,
+				paramOperators: params,
+				generatedSql: props.sql.sql,
+				formatterConfig: props.sql.formatterConfig,
+			})
+			return createXStatementSync({
+				build: finalParams => {
+					const {
+						sql: sqlString,
+						namedParams,
+						hasJsonColumns,
+					} = newBuilder.prepare(finalParams)
+					const stmt = props.prepare(sqlString)
+					return { stmt, namedParams, hasJsonColumns }
+				},
+				prepare: props.prepare,
+				sql: newBuilder,
+			})
 		},
 	}
 }

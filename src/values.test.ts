@@ -441,7 +441,7 @@ describe("Values Context SQL Generation", () => {
 					config: { key: "value5" },
 				})
 				.trim(),
-			"INSERT INTO test_data (\n  id,\n  data_one,\n  data_two,\n  metadata,\n  settings,\n  config\n)\nVALUES (\n    $id,\n    jsonb($data_one),\n    jsonb($data_two),\n    jsonb($metadata),\n    jsonb($settings),\n    jsonb($config)\n  )"
+			"INSERT INTO test_data (\n    id,\n    data_one,\n    data_two,\n    metadata,\n    settings,\n    config\n  )\nVALUES (\n    $id,\n    jsonb($data_one),\n    jsonb($data_two),\n    jsonb($metadata),\n    jsonb($settings),\n    jsonb($config)\n  )"
 		)
 	})
 })

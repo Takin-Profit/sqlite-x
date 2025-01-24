@@ -167,7 +167,7 @@ describe("Columns Context SQL Generation", () => {
 
 		assert.equal(
 			stmt.sourceSQL({ id: 1, name: "test" }).trim(),
-			"CREATE TABLE test_table (\n        id INTEGER PRIMARY KEY,\n        name TEXT\n      );"
+			"CREATE TABLE test_table (\n  id INTEGER PRIMARY KEY,\n  name TEXT\n);"
 		)
 	})
 })

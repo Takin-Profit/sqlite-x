@@ -48,7 +48,7 @@ describe("SQL Context Generation", () => {
 					minAge: 18,
 				})
 				.trim(),
-			"SELECT * FROM test_table\n   WHERE age > $minAge\nORDER BY name ASC\nLIMIT 10"
+			"SELECT *\nFROM test_table\nWHERE age > $minAge\nORDER BY name ASC\nLIMIT 10"
 		)
 	})
 
@@ -74,7 +74,7 @@ describe("SQL Context Generation", () => {
 					},
 				})
 				.trim(),
-			"INSERT INTO test_table\n   (name, age, metadata)\nVALUES ($name, $age, jsonb($metadata))\nRETURNING id, created_at"
+			"INSERT INTO test_table (name, age, metadata)\nVALUES ($name, $age, jsonb($metadata))\nRETURNING id,\n  created_at"
 		)
 	})
 
@@ -100,7 +100,7 @@ describe("SQL Context Generation", () => {
 					},
 				})
 				.trim(),
-			"UPDATE test_table\n   SET name = $name,\n  metadata = jsonb($metadata)\nWHERE id = $id\nRETURNING *"
+			"UPDATE test_table\nSET name = $name,\n  metadata = jsonb($metadata)\nWHERE id = $id\nRETURNING *"
 		)
 	})
 
@@ -126,7 +126,7 @@ describe("SQL Context Generation", () => {
 					pattern: "test%",
 				})
 				.trim(),
-			"SELECT * FROM test_table\n   WHERE age > $minAge AND name LIKE $pattern\nORDER BY age DESC, name ASC\nLIMIT 20\nOFFSET 40"
+			"SELECT *\nFROM test_table\nWHERE age > $minAge\n  AND name LIKE $pattern\nORDER BY age DESC,\n  name ASC\nLIMIT 20 OFFSET 40"
 		)
 	})
 
@@ -158,7 +158,7 @@ describe("SQL Context Generation", () => {
 					},
 				})
 				.trim(),
-			"INSERT INTO test_table\n    (name, metadata, settings)\nVALUES ($name, jsonb($metadata), jsonb($settings))\nRETURNING id, created_at"
+			"INSERT INTO test_table (name, metadata, settings)\nVALUES ($name, jsonb($metadata), jsonb($settings))\nRETURNING id,\n  created_at"
 		)
 	})
 })

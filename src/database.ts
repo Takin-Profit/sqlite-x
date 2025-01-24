@@ -35,14 +35,6 @@ import {
 import type { CleanupPragmas, DataRow, DBOptions } from "#types"
 
 /**
- * Function type for SQL template literal tag
- */
-export type SqlFn<P extends DataRow> = (
-	strings: TemplateStringsArray,
-	...params: SqlTemplateValues<P>
-) => Sql<P>
-
-/**
  * Type-safe SQLite database wrapper with prepared statement caching, SQL template literals,
  * and JSON support.
  */

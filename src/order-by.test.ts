@@ -10,12 +10,12 @@ import { DB } from "#database"
 
 describe("buildOrderByStatement", () => {
 	test("generates single column order", () => {
-		const { sql } = buildOrderByStatement({ name: "ASC" })
+		const sql = buildOrderByStatement({ name: "ASC" })
 		assert.equal(sql, "ORDER BY name ASC")
 	})
 
 	test("generates multi-column order", () => {
-		const { sql } = buildOrderByStatement({
+		const sql = buildOrderByStatement({
 			age: "DESC",
 			name: "ASC",
 		})

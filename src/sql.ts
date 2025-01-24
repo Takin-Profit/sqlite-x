@@ -160,10 +160,10 @@ export class Sql<P extends DataRow> {
 
 		// Rest remains the same
 		if (context.where) {
-			parts.push(buildWhereStatement(context.where).sql)
+			parts.push(buildWhereStatement(context.where))
 		}
 		if (context.orderBy) {
-			parts.push(buildOrderByStatement(context.orderBy).sql)
+			parts.push(buildOrderByStatement(context.orderBy))
 		}
 		if (context.limit !== undefined) {
 			parts.push(`LIMIT ${context.limit}`)

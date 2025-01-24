@@ -223,16 +223,14 @@ function validateSingleCondition<P extends DataRow>(
 	return []
 }
 
-export function buildWhereStatement(where: WhereClause<DataRow>): {
-	sql: string
-} {
+export function buildWhereStatement(where: WhereClause<DataRow>): string {
 	if (typeof where === "string") {
 		if (where.includes("->json")) {
 			const [field, op, param] = where.trim().split(/\s+/)
 			const value = param.split("->")[0]
-			return { sql: `WHERE ${field} ${op} jsonb(${value})` }
+			return `WHERE ${field} ${op} jsonb(${value})`
 		}
-		return { sql: `WHERE ${where}` }
+		return `WHERE ${where}`
 	}
 
 	const conditions = where
@@ -246,5 +244,5 @@ export function buildWhereStatement(where: WhereClause<DataRow>): {
 		})
 		.join("")
 
-	return { sql: `WHERE ${conditions}` }
+	return `WHERE ${conditions}`
 }

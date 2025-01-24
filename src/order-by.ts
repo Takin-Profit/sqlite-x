@@ -7,7 +7,7 @@ import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors"
 
 export function buildOrderByStatement<P extends DataRow>(
 	orderBy: Partial<Record<keyof P, "ASC" | "DESC">>
-): { sql: string } {
+): string {
 	if (!orderBy || Object.keys(orderBy).length === 0) {
 		throw new NodeSqliteError(
 			"ERR_SQLITE_PARAM",
@@ -31,7 +31,5 @@ export function buildOrderByStatement<P extends DataRow>(
 		return `${column} ${direction}`
 	})
 
-	return {
-		sql: `ORDER BY ${orderClauses.join(", ")}`,
-	}
+	return `ORDER BY ${orderClauses.join(", ")}`
 }

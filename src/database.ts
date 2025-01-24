@@ -16,7 +16,6 @@ import {
 	createStatementCache,
 	type StatementCache,
 	type CacheStats,
-	type StatementCacheOptions,
 } from "#cache"
 import { join } from "node:path"
 import {
@@ -33,22 +32,7 @@ import {
 	type SqlTemplateValues,
 	type FormatterConfig,
 } from "#sql"
-import type { DataRow } from "#types"
-
-export type CleanupPragmas = {
-	optimize?: boolean
-	shrinkMemory?: boolean
-	walCheckpoint?: "PASSIVE" | "FULL" | "RESTART" | "TRUNCATE"
-}
-
-export interface DBOptions {
-	location?: string | ":memory:"
-	statementCache?: boolean | StatementCacheOptions
-	pragma?: PragmaConfig
-	environment?: "development" | "testing" | "production"
-	logger?: Logger
-	format?: FormatterConfig
-}
+import type { CleanupPragmas, DataRow, DBOptions } from "#types"
 
 /**
  * Function type for SQL template literal tag
@@ -58,12 +42,21 @@ export type SqlFn<P extends DataRow> = (
 	...params: SqlTemplateValues<P>
 ) => Sql<P>
 
+/**
+ * Type-safe SQLite database wrapper with prepared statement caching, SQL template literals,
+ * and JSON support.
+ */
 export class DB {
 	#db: DatabaseSync
 	readonly #statementCache?: StatementCache
 	readonly #location: string
 	readonly #logger: Logger
 	readonly #formatConfig?: FormatterConfig
+	/**
+	 * Creates a new database connection with optional configuration.
+	 * @param options Database configuration options
+	 * @throws {NodeSqliteError} If database cannot be opened or initialized
+	 */
 
 	constructor(options: DBOptions = {}) {
 		const location = options.location ?? ":memory:"
@@ -114,6 +107,12 @@ export class DB {
 			)
 		}
 	}
+	/**
+	 * Prepares an SQL statement with optional caching.
+	 * @param sql The SQL statement to prepare
+	 * @returns Prepared statement
+	 * @throws {NodeSqliteError} If statement preparation fails
+	 */
 
 	prepareStatement(sql: string): StatementSync {
 		this.#logger.debug("Preparing statement", { sql })
@@ -156,7 +155,12 @@ export class DB {
 			)
 		}
 	}
-
+	/**
+	 * Creates a type-safe SQL query builder using template literals.
+	 * @param strings SQL template strings
+	 * @param params SQL template parameters and contexts
+	 * @returns Type-safe statement executor
+	 */
 	sql<P extends DataRow, R = unknown>(
 		strings: TemplateStringsArray,
 		...params: SqlTemplateValues<P>
@@ -178,6 +182,12 @@ export class DB {
 		})
 	}
 
+	/**
+	 * Creates a backup of the database.
+	 * @param filename Path where backup will be saved
+	 * @throws {NodeSqliteError} If backup creation fails
+	 */
+
 	backup(filename: string): void {
 		this.#logger.info("Starting database backup", { filename })
 		try {
@@ -196,6 +206,12 @@ export class DB {
 			)
 		}
 	}
+
+	/**
+	 * Restores database from a backup file.
+	 * @param filename Path to backup file
+	 * @throws {NodeSqliteError} If restore fails or file is inaccessible
+	 */
 
 	restore(filename: string): void {
 		this.#logger.info("Starting database restore", { filename })
@@ -264,6 +280,12 @@ export class DB {
 		}
 	}
 
+	/**
+	 * Executes raw SQL directly.
+	 * @param sql SQL statement to execute
+	 * @throws {NodeSqliteError} If execution fails
+	 */
+
 	exec(sql: string): void {
 		try {
 			this.#logger.debug("Executing raw SQL", { sql })
@@ -281,10 +303,19 @@ export class DB {
 		}
 	}
 
+	/**
+	 * Retrieves prepared statement cache statistics.
+	 * @returns Cache statistics if caching is enabled, undefined otherwise
+	 */
+
 	getCacheStats(): CacheStats | undefined {
 		this.#logger.debug("Retrieving cache statistics")
 		return this.#statementCache?.getStats()
 	}
+
+	/**
+	 * Clears the prepared statement cache if enabled.
+	 */
 
 	clearStatementCache(): void {
 		if (this.#statementCache) {
@@ -294,6 +325,10 @@ export class DB {
 		}
 	}
 
+	/**
+	 * Closes database connection and optionally runs cleanup pragmas.
+	 * @param pragmas Optional cleanup operations to perform before closing
+	 */
 	close(pragmas?: CleanupPragmas): void {
 		this.#logger.info("Closing database connection", pragmas)
 
@@ -317,6 +352,13 @@ export class DB {
 			this.#logger.info("Database connection closed")
 		}
 	}
+
+	/**
+	 * Configures database pragmas.
+	 * @param config PRAGMA configuration settings
+	 * @throws {NodeSqliteError} If pragma configuration fails
+	 * @private
+	 */
 
 	#configurePragmas(config: PragmaConfig): void {
 		try {

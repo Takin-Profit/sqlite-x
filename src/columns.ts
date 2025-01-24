@@ -2,7 +2,10 @@ import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors.js"
 import type { DataRow } from "#types"
 import { validationErr, type ValidationError } from "#validate"
 
-type BaseConstraint =
+/**
+ * SQLite column constraints for table definitions
+ */
+export type BaseConstraint =
 	| "PRIMARY KEY"
 	| "AUTOINCREMENT"
 	| "UNIQUE"
@@ -11,9 +14,18 @@ type BaseConstraint =
 	| `DEFAULT ${string}`
 	| "NOT NULL"
 
-type DataType = "TEXT" | "INTEGER" | "REAL" | "BLOB"
+/**
+ * SQLite storage classes (data types)
+ * @see https://www.sqlite.org/datatype3.html
+ */
+export type DataType = "TEXT" | "INTEGER" | "REAL" | "BLOB"
 
-type ConstraintPatterns<T, D extends DataType> = undefined extends T
+/**
+ * Patterns for combining data types with constraints based on nullability
+ * @template T Field type
+ * @template D SQLite data type
+ */
+export type ConstraintPatterns<T, D extends DataType> = undefined extends T
 	?
 			| `${D} ${BaseConstraint}`
 			| `${D} ${BaseConstraint} ${Exclude<BaseConstraint, "NOT NULL">}`
@@ -23,7 +35,11 @@ type ConstraintPatterns<T, D extends DataType> = undefined extends T
 			| `${D} ${BaseConstraint} ${BaseConstraint}`
 			| `${D} ${BaseConstraint} ${BaseConstraint} ${BaseConstraint}`
 
-type ValidColumnTypeMap<T> = T extends string
+/**
+ * Maps TypeScript types to valid SQLite column definitions with constraints
+ * @template T The TypeScript type to map
+ */
+export type ValidColumnTypeMap<T> = T extends string
 	? ConstraintPatterns<T, "TEXT"> | "TEXT"
 	: T extends number
 		?
@@ -43,6 +59,10 @@ type ValidColumnTypeMap<T> = T extends string
 							| "TEXT"
 					: never
 
+/**
+ * Type-safe column definitions for a table
+ * @template T Table row type
+ */
 export type Columns<T extends DataRow> = {
 	[K in keyof T]?: ValidColumnTypeMap<T[K]>
 }
@@ -98,7 +118,7 @@ export function buildColumnsStatement<T extends DataRow>(
 			"ERR_SQLITE_COLUMNS",
 			SqlitePrimaryResultCode.SQLITE_ERROR,
 			"Invalid column definitions",
-			errors.map((e) => e.message).join("\n"),
+			errors.map(e => e.message).join("\n"),
 			undefined
 		)
 	}

@@ -4,6 +4,10 @@
 
 import { validationErr, type ValidationError } from "./validate"
 
+/**
+ * SQLite journal mode settings
+ * @see https://www.sqlite.org/pragma.html#pragma_journal_mode
+ */
 export const JournalModes = [
 	"DELETE",
 	"TRUNCATE",
@@ -14,25 +18,59 @@ export const JournalModes = [
 ] as const
 export type JournalMode = (typeof JournalModes)[number]
 
+/**
+ * Synchronization settings for transaction safety
+ * @see https://www.sqlite.org/pragma.html#pragma_synchronous
+ */
 export const SynchronousModes = ["OFF", "NORMAL", "FULL", "EXTRA"] as const
 export type SynchronousMode = (typeof SynchronousModes)[number]
 
+/**
+ * Temporary storage location settings
+ * @see https://www.sqlite.org/pragma.html#pragma_temp_store
+ */
 export const TempStores = ["DEFAULT", "FILE", "MEMORY"] as const
 export type TempStore = (typeof TempStores)[number]
 
+/**
+ * Database locking mode settings
+ * @see https://www.sqlite.org/pragma.html#pragma_locking_mode
+ */
 export const LockingModes = ["NORMAL", "EXCLUSIVE"] as const
 export type LockingMode = (typeof LockingModes)[number]
 
+/**
+ * SQLite PRAGMA configuration options
+ */
 export type PragmaConfig = Partial<{
+	/** Journal mode for transaction logging */
 	journalMode: JournalMode
+
+	/** Level of transaction synchronization */
 	synchronous: SynchronousMode
+
+	/** Database cache size in kilobytes */
 	cacheSize: number
+
+	/** Memory-mapped I/O size in bytes */
 	mmapSize: number
+
+	/** Temporary storage location */
 	tempStore: TempStore
+
+	/** Database locking mode */
 	lockingMode: LockingMode
+
+	/** Busy handler timeout in milliseconds */
 	busyTimeout: number
+
+	/** Enable/disable foreign key constraints */
 	foreignKeys: boolean
+
+	/** Write-ahead log auto-checkpoint size */
 	walAutocheckpoint: number
+
+	/** Allow/disallow untrusted schema loads */
 	trustedSchema: boolean
 }>
 

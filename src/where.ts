@@ -158,6 +158,16 @@ type ExtendedWhereCondition<P extends DataRow> =
 			SingleWhereCondition<P>,
 	  ]
 
+/**
+ * Represents a WHERE clause condition for SQL queries with strongly-typed column references and parameter bindings.
+ * Supports single conditions and compound conditions with logical operators (AND/OR).
+ * @example
+ * // Single condition
+ * const where: WhereClause<User> = "age > $minAge"
+ *
+ * // Compound condition
+ * const where: WhereClause<User> = ["age > $minAge", "AND", "isActive = $active"]
+ */
 export type WhereClause<P extends DataRow> =
 	| SingleWhereCondition<P>
 	| ExtendedWhereCondition<P>

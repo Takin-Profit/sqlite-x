@@ -9,28 +9,58 @@ import type { DataRow } from "#types"
 import { validationErr, type ValidationError } from "#validate"
 import { validateWhereClause, type WhereClause } from "#where"
 
+/**
+ * Represents parameter values that can be used in SQL statements, either as direct parameters
+ * or with JSON conversion
+ */
 export type ValueType<P extends DataRow> = ParameterOperator<P> | ToJson<P>
 
-type ValuesWithJsonColumns<P extends DataRow> = [
+/**
+ * Configuration for handling all columns with specific JSON column designations
+ */
+export type ValuesWithJsonColumns<P extends DataRow> = [
 	"*",
 	{ jsonColumns: (keyof P)[] },
 ]
 
+/**
+ * Options for INSERT or SET operations, supporting individual columns,
+ * all columns (*), or JSON column specifications
+ */
 export type InsertOrSetOptions<P extends DataRow> =
 	| ValueType<P>[]
 	| "*"
 	| ValuesWithJsonColumns<P>
 
-// Core SQL context type
-type SqlContext<P extends DataRow> = Partial<{
+/**
+ * Core SQL context for building type-safe queries
+ */
+export type SqlContext<P extends DataRow> = Partial<{
+	/** Column selection with optional JSON transformations */
 	cols: (keyof P | FromJson<P> | ToJson<P>)[] | "*"
+
+	/** INSERT values specification */
 	values: InsertOrSetOptions<P>
+
+	/** UPDATE SET clause specification */
 	set: InsertOrSetOptions<P>
+
+	/** WHERE clause conditions */
 	where: WhereClause<P>
+
+	/** ORDER BY clause with direction */
 	orderBy: Partial<Record<keyof P, "ASC" | "DESC">>
+
+	/** LIMIT clause value */
 	limit: number
+
+	/** OFFSET clause value */
 	offset: number
+
+	/** RETURNING clause columns */
 	returning: (keyof P)[] | "*"
+
+	/** Table column definitions */
 	columns: Columns<P>
 }>
 
@@ -305,8 +335,6 @@ export function isSqlContext<P extends DataRow>(
 ): value is SqlContext<P> {
 	return validateSqlContext<P>(value).length === 0
 }
-
-export type { SqlContext }
 
 type ContextValidationError = {
 	type: "DUPLICATE_CLAUSE" | "INCOMPATIBLE_CLAUSE" | "INVALID_COMBINATION"

@@ -66,10 +66,6 @@ export type ParamValue<P extends DataRow> =
 	| ToJson<P>
 	| FromJson<P>
 
-export type SqlTemplateValues<P extends DataRow> = ReadonlyArray<
-	ParamValue<P> | SqlContext<P>
->
-
 function toSupportedValue(value: unknown): SupportedValueType {
 	if (
 		value === null ||
@@ -82,15 +78,32 @@ function toSupportedValue(value: unknown): SupportedValueType {
 	}
 	return String(value)
 }
+/**
+ * Parameter values and contexts that can be used in SQL template literals
+ */
+export type SqlTemplateValues<P extends DataRow> = ReadonlyArray<
+	ParamValue<P> | SqlContext<P>
+>
 
+/**
+ * Configuration for SQL formatting
+ */
 export type FormatterConfig =
 	| false
 	| {
-			indent?: string // E.G. '\t', - Defaults to two spaces
+			/** Indentation string (default: two spaces) */
+			indent?: string
+
+			/** Case for SQL keywords */
 			reservedWordCase?: "upper" | "lower"
+
+			/** Lines between queries */
 			linesBetweenQueries?: number | "preserve"
 	  }
 
+/**
+ * Options for initializing SQL builder
+ */
 export type SqlOptions<P extends DataRow> = {
 	strings: readonly string[]
 	paramOperators: SqlTemplateValues<P>
@@ -322,16 +335,32 @@ export class Sql<P extends DataRow> {
 		}
 	}
 }
+
 /**
- * Interface for prepared statements with type safety
+ * Interface for prepared SQL statements with type safety and chaining support.
+ * @template P Type of parameters object
+ * @template RET Type of returned rows
  */
 export interface XStatementSync<P extends DataRow, RET = unknown> {
+	/** Execute query and return all result rows */
 	all<R = RET>(params: P): R[]
+
+	/** Execute query and return an iterator over result rows */
 	iterate<R = RET>(params: P): Iterator<R>
+
+	/** Execute query and return first result row or undefined */
 	get<R = RET>(params: P): R | undefined
+
+	/** Execute query and return statement result info */
 	run(params: P): StatementResultingChanges
+
+	/** Get SQL with parameters expanded */
 	expandedSQL(params: P): string
+
+	/** Get original SQL source */
 	sourceSQL: (params: P) => string
+
+	/** Chain another SQL template literal */
 	sql(
 		strings: TemplateStringsArray,
 		...params: SqlTemplateValues<P>

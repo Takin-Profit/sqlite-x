@@ -2,6 +2,12 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+/**
+ * Represents a validation error with a message and optional path indicating where the error occurred.
+ * @property _validation_error - Internal flag to identify validation errors
+ * @property message - Human-readable error message
+ * @property path - Optional path indicating where the error occurred (e.g. "user.name")
+ */
 export type ValidationError = {
 	_validation_error: true
 	message: string

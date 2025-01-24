@@ -12,18 +12,40 @@ import type { CacheStats, StatementCacheOptions } from "#cache"
 import type { PragmaConfig } from "#pragmas"
 import type { Logger } from "#logger"
 
-export type CleanupPragmas = {
+/**
+ * Configuration options for database cleanup operations when closing the connection.
+ */
+export interface CleanupPragmas {
+	/** Runs PRAGMA optimize to optimize the database */
 	optimize?: boolean
+
+	/** Runs PRAGMA shrink_memory to release memory back to the system */
 	shrinkMemory?: boolean
+
+	/** WAL checkpoint mode to run before closing */
 	walCheckpoint?: "PASSIVE" | "FULL" | "RESTART" | "TRUNCATE"
 }
 
+/**
+ * Configuration options for database initialization.
+ */
 export interface DBOptions {
+	/** Database file path or ":memory:" for in-memory database */
 	location?: string | ":memory:"
+
+	/** Statement cache configuration - boolean to use defaults or detailed options */
 	statementCache?: boolean | StatementCacheOptions
+
+	/** SQLite PRAGMA settings */
 	pragma?: PragmaConfig
+
+	/** Runtime environment affecting default PRAGMA settings */
 	environment?: "development" | "testing" | "production"
+
+	/** Custom logger implementation */
 	logger?: Logger
+
+	/** SQL formatting configuration */
 	format?: FormatterConfig
 }
 

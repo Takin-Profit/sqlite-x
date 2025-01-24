@@ -461,12 +461,9 @@ export function combineContexts<P extends DataRow>(
 
 export function buildColsStatement<P extends DataRow>(
 	cols: (keyof P | FromJson<P> | ToJson<P>)[] | "*"
-): { sql: string; hasJsonColumns: boolean } {
+): string {
 	if (cols === "*") {
-		return {
-			sql: "SELECT *",
-			hasJsonColumns: false,
-		}
+		return "SELECT *"
 	}
 
 	const columnsList = cols.map(col => {
@@ -484,14 +481,5 @@ export function buildColsStatement<P extends DataRow>(
 		return String(col)
 	})
 
-	const hasJsonColumns = cols.some(
-		col =>
-			typeof col === "string" &&
-			(col.endsWith("->json") || col.endsWith("<-json"))
-	)
-
-	return {
-		sql: `SELECT ${columnsList.join(", ")}`,
-		hasJsonColumns,
-	}
+	return `SELECT ${columnsList.join(", ")}`
 }

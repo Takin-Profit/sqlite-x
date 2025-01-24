@@ -8,6 +8,7 @@
 // noinspection t
 
 import {
+	buildColsStatement,
 	isSqlContext,
 	type SqlContext,
 	validateContextCombination,
@@ -140,6 +141,10 @@ export class Sql<P extends DataRow> {
 	#contextToSql(context: SqlContext<P>): string {
 		const parts: string[] = []
 
+		if (context.cols) {
+			parts.push(buildColsStatement(context.cols))
+		}
+
 		// Columns statement comes first
 		if (context.columns) {
 			parts.push(buildColumnsStatement(context.columns))
@@ -147,10 +152,10 @@ export class Sql<P extends DataRow> {
 
 		// Values and Set come next
 		if (context.values) {
-			parts.push(buildValuesStatement(context.values, this.#params).sql)
+			parts.push(buildValuesStatement(context.values, this.#params))
 		}
 		if (context.set) {
-			parts.push(buildSetStatement(context.set, this.#params).sql)
+			parts.push(buildSetStatement(context.set, this.#params))
 		}
 
 		// Rest remains the same

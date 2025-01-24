@@ -5,7 +5,6 @@ import type { DataRow } from "#types"
 type BuildSqlResult = {
 	columns: string[]
 	placeholders: string[]
-	hasJsonColumns: boolean
 }
 
 function buildSqlComponents<P extends DataRow>(
@@ -20,8 +19,7 @@ function buildSqlComponents<P extends DataRow>(
 		const columns = Object.keys(params)
 		return {
 			columns,
-			placeholders: columns.map((k) => `$${k}`),
-			hasJsonColumns: false,
+			placeholders: columns.map(k => `$${k}`),
 		}
 	}
 
@@ -44,17 +42,13 @@ function buildSqlComponents<P extends DataRow>(
 			(options[1] as { jsonColumns: string[] }).jsonColumns
 		)
 		const columns = Object.keys(params)
-		const existingJsonColumns = [...jsonColumns].filter((col) =>
-			columns.includes(col)
-		)
-		const placeholders = columns.map((col) =>
+		const placeholders = columns.map(col =>
 			jsonColumns.has(col) ? `jsonb($${col})` : `$${col}`
 		)
 
 		return {
 			columns,
 			placeholders,
-			hasJsonColumns: existingJsonColumns.length > 0,
 		}
 	}
 
@@ -95,7 +89,7 @@ function buildSqlComponents<P extends DataRow>(
 			}
 		}
 
-		return { columns, placeholders, hasJsonColumns: hasJson }
+		return { columns, placeholders }
 	}
 
 	throw new NodeSqliteError(
@@ -110,28 +104,18 @@ function buildSqlComponents<P extends DataRow>(
 export function buildValuesStatement<P extends DataRow>(
 	values: InsertOrSetOptions<P>,
 	params: P
-): { sql: string; hasJsonColumns: boolean } {
-	const { columns, placeholders, hasJsonColumns } = buildSqlComponents(
-		values,
-		params
-	)
-	return {
-		sql: `(${columns.join(", ")}) VALUES (${placeholders.join(", ")})`,
-		hasJsonColumns,
-	}
+): string {
+	const { columns, placeholders } = buildSqlComponents(values, params)
+
+	return `(${columns.join(", ")}) VALUES (${placeholders.join(", ")})`
 }
 
 export function buildSetStatement<P extends DataRow>(
 	set: InsertOrSetOptions<P>,
 	params: P
-): { sql: string; hasJsonColumns: boolean } {
-	const { columns, placeholders, hasJsonColumns } = buildSqlComponents(
-		set,
-		params
-	)
+): string {
+	const { columns, placeholders } = buildSqlComponents(set, params)
 	const setPairs = columns.map((col, i) => `${col} = ${placeholders[i]}`)
-	return {
-		sql: `SET ${setPairs.join(", ")}`,
-		hasJsonColumns,
-	}
+
+	return `SET ${setPairs.join(", ")}`
 }

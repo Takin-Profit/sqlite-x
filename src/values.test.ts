@@ -17,16 +17,14 @@ describe("buildValuesStatement", () => {
 				email: "john@example.com",
 			}
 
-			const { sql, hasJsonColumns } = buildValuesStatement("*", params)
+			const sql = buildValuesStatement("*", params)
 			assert.equal(sql, "(name, age, email) VALUES ($name, $age, $email)")
-			assert.equal(hasJsonColumns, false)
 		})
 
 		test("handles empty params object", () => {
 			const params = {}
-			const { sql, hasJsonColumns } = buildValuesStatement("*", params)
+			const sql = buildValuesStatement("*", params)
 			assert.equal(sql, "() VALUES ()")
-			assert.equal(hasJsonColumns, false)
 		})
 	})
 
@@ -38,7 +36,7 @@ describe("buildValuesStatement", () => {
 				metadata: { key: "value" },
 			}
 
-			const { sql, hasJsonColumns } = buildValuesStatement(
+			const sql = buildValuesStatement(
 				["*", { jsonColumns: ["metadata"] }],
 				params
 			)
@@ -47,7 +45,6 @@ describe("buildValuesStatement", () => {
 				sql,
 				"(id, name, metadata) VALUES ($id, $name, jsonb($metadata))"
 			)
-			assert.equal(hasJsonColumns, true)
 		})
 
 		test("handles multiple JSON columns", () => {
@@ -57,7 +54,7 @@ describe("buildValuesStatement", () => {
 				settings: { theme: "dark" },
 			}
 
-			const { sql, hasJsonColumns } = buildValuesStatement(
+			const sql = buildValuesStatement(
 				["*", { jsonColumns: ["profile", "settings"] }],
 				params
 			)
@@ -66,7 +63,6 @@ describe("buildValuesStatement", () => {
 				sql,
 				"(id, profile, settings) VALUES ($id, jsonb($profile), jsonb($settings))"
 			)
-			assert.equal(hasJsonColumns, true)
 		})
 
 		test("ignores non-existent JSON columns", () => {
@@ -75,13 +71,12 @@ describe("buildValuesStatement", () => {
 				name: "John",
 			}
 
-			const { sql, hasJsonColumns } = buildValuesStatement(
+			const sql = buildValuesStatement(
 				["*", { jsonColumns: ["metadata" as keyof typeof params] }],
 				params
 			)
 
 			assert.equal(sql, "(id, name) VALUES ($id, $name)")
-			assert.equal(hasJsonColumns, false)
 		})
 	})
 
@@ -93,13 +88,9 @@ describe("buildValuesStatement", () => {
 				email: "john@example.com",
 			}
 
-			const { sql, hasJsonColumns } = buildValuesStatement(
-				["$name", "$age"],
-				params
-			)
+			const sql = buildValuesStatement(["$name", "$age"], params)
 
 			assert.equal(sql, "(name, age) VALUES ($name, $age)")
-			assert.equal(hasJsonColumns, false)
 		})
 
 		test("handles JSON columns with toJson suffix", () => {
@@ -109,7 +100,7 @@ describe("buildValuesStatement", () => {
 				settings: { theme: "dark" },
 			}
 
-			const { sql, hasJsonColumns } = buildValuesStatement(
+			const sql = buildValuesStatement(
 				["$id", "$metadata->json", "$settings->json"],
 				params
 			)
@@ -118,7 +109,6 @@ describe("buildValuesStatement", () => {
 				sql,
 				"(id, metadata, settings) VALUES ($id, jsonb($metadata), jsonb($settings))"
 			)
-			assert.equal(hasJsonColumns, true)
 		})
 
 		test("handles mix of regular and JSON columns", () => {
@@ -128,7 +118,7 @@ describe("buildValuesStatement", () => {
 				metadata: { key: "value" },
 			}
 
-			const { sql, hasJsonColumns } = buildValuesStatement(
+			const sql = buildValuesStatement(
 				["$id", "$name", "$metadata->json"],
 				params
 			)
@@ -137,7 +127,6 @@ describe("buildValuesStatement", () => {
 				sql,
 				"(id, name, metadata) VALUES ($id, $name, jsonb($metadata))"
 			)
-			assert.equal(hasJsonColumns, true)
 		})
 	})
 
@@ -206,7 +195,7 @@ describe("buildValuesStatement", () => {
 				email_address: "john@example.com",
 			}
 
-			const { sql } = buildValuesStatement("*", params)
+			const sql = buildValuesStatement("*", params)
 			assert.equal(
 				sql,
 				"(user-name, email_address) VALUES ($user-name, $email_address)"
@@ -220,7 +209,7 @@ describe("buildValuesStatement", () => {
 				b: 2,
 			}
 
-			const { sql } = buildValuesStatement(["$c", "$a", "$b"], params)
+			const sql = buildValuesStatement(["$c", "$a", "$b"], params)
 
 			assert.equal(sql, "(c, a, b) VALUES ($c, $a, $b)")
 		})
@@ -228,7 +217,7 @@ describe("buildValuesStatement", () => {
 		test("handles single column case", () => {
 			const params = { id: 1 }
 
-			const { sql } = buildValuesStatement(["$id"], params)
+			const sql = buildValuesStatement(["$id"], params)
 			assert.equal(sql, "(id) VALUES ($id)")
 		})
 	})

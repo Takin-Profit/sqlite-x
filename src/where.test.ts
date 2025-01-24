@@ -321,26 +321,34 @@ describe("Where Context SQL Generation", () => {
 	})
 
 	test("generates basic where condition", () => {
-		const stmt = db.prepare<{ id: number }>(
-			(ctx) => ctx.sql`SELECT * FROM test_data ${{ where: "id = $id" }}`
-		)
+		const stmt = db.sql<{
+			id: number
+		}>`SELECT * FROM test_data ${{ where: "id = $id" }}`
+
 		assert.equal(
-			stmt.sourceSQL({ id: 1 }).trim(),
+			stmt
+				.sourceSQL({
+					id: 1,
+				})
+				.trim(),
 			"SELECT * FROM test_data WHERE id = $id"
 		)
 	})
 
 	test("generates where with AND conditions", () => {
 		type QueryParams = { min_age: number; active: boolean }
-		const stmt = db.prepare<QueryParams>(
-			(ctx) =>
-				ctx.sql`SELECT * FROM test_data ${{
-					// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-					where: ["age > $min_age", "AND", "active = $active"] as any,
-				}}`
-		)
+		const stmt = db.sql<QueryParams>`SELECT * FROM test_data ${{
+			// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+			where: ["age > $min_age", "AND", "active = $active"] as any,
+		}}`
+
 		assert.equal(
-			stmt.sourceSQL({ min_age: 18, active: true }).trim(),
+			stmt
+				.sourceSQL({
+					min_age: 18,
+					active: true,
+				})
+				.trim(),
 			"SELECT * FROM test_data WHERE age > $min_age AND active = $active"
 		)
 	})
@@ -351,29 +359,34 @@ describe("Where Context SQL Generation", () => {
 			pattern: string
 			active: boolean
 		}
-		const stmt = db.prepare<QueryParams>(
-			(ctx) =>
-				ctx.sql`SELECT * FROM test_data ${{
-					where: [
-						"age > $min_age",
-						"AND",
-						"name LIKE $pattern",
-						"OR",
-						"active = $active",
-						// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-					] as any,
-				}}`
-		)
+		const stmt = db.sql<QueryParams>`SELECT * FROM test_data ${{
+			where: [
+				"age > $min_age",
+				"AND",
+				"name LIKE $pattern",
+				"OR",
+				"active = $active",
+				// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+			] as any,
+		}}`
+
 		assert.equal(
-			stmt.sourceSQL({ min_age: 18, pattern: "test%", active: true }).trim(),
+			stmt
+				.sourceSQL({
+					min_age: 18,
+					pattern: "test%",
+					active: true,
+				})
+				.trim(),
 			"SELECT * FROM test_data WHERE age > $min_age AND name LIKE $pattern OR active = $active"
 		)
 	})
 
 	test("generates where with IS NULL", () => {
-		const stmt = db.prepare<Record<string, never>>(
-			(ctx) => ctx.sql`SELECT * FROM test_data ${{ where: "metadata IS NULL" }}`
-		)
+		const stmt = db.sql<
+			Record<string, never>
+		>`SELECT * FROM test_data ${{ where: "metadata IS NULL" }}`
+
 		assert.equal(
 			stmt.sourceSQL({}).trim(),
 			"SELECT * FROM test_data WHERE metadata IS NULL"
@@ -385,15 +398,20 @@ describe("Where Context SQL Generation", () => {
 			min_age: number
 			settings: { theme: string }
 		}
-		const stmt = db.prepare<QueryParams>(
-			(ctx) =>
-				ctx.sql`SELECT * FROM test_data ${{
-					// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-					where: ["age > $min_age", "AND", "settings = $settings->json"] as any,
-				}}`
-		)
+		const stmt = db.sql<QueryParams>`SELECT * FROM test_data ${{
+			// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+			where: ["age > $min_age", "AND", "settings = $settings->json"] as any,
+		}}`
+
 		assert.equal(
-			stmt.sourceSQL({ min_age: 18, settings: { theme: "dark" } }).trim(),
+			stmt
+				.sourceSQL({
+					min_age: 18,
+					settings: {
+						theme: "dark",
+					},
+				})
+				.trim(),
 			"SELECT * FROM test_data WHERE age > $min_age AND settings = jsonb($settings)"
 		)
 	})

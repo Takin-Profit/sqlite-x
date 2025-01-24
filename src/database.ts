@@ -25,7 +25,6 @@ import { accessSync, renameSync, unlinkSync } from "node:fs"
 import { type Logger, NoopLogger } from "#logger"
 import {
 	createXStatementSync,
-	type XStatementSync,
 	Sql,
 	type SqlTemplateValues,
 	type FormatterConfig,
@@ -154,15 +153,17 @@ export class DB {
 		}
 	}
 
-	prepare<P extends DataRow, R = unknown>(
-		builder: (ctx: { sql: SqlFn<P> }) => Sql<P>
-	): XStatementSync<P, R> {
-		return createXStatementSync<P, R>((finalParams) => {
-			const { sql, namedParams, hasJsonColumns } = builder({
-				sql: (strings, ...params) => {
-					return new Sql<P>(strings, params, finalParams, this.#formatConfig)
-				},
-			}).prepare()
+	sql<P extends DataRow, R = unknown>(
+		strings: TemplateStringsArray,
+		...params: SqlTemplateValues<P>
+	) {
+		return createXStatementSync<P, R>(finalParams => {
+			const { sql, namedParams, hasJsonColumns } = new Sql<P>(
+				strings,
+				params,
+				finalParams,
+				this.#formatConfig
+			).prepare()
 			const stmt = this.prepareStatement(sql)
 
 			return { stmt, namedParams, hasJsonColumns }

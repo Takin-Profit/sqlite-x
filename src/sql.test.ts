@@ -30,8 +30,7 @@ afterEach(() => {
 
 describe("SQL Context Generation", () => {
 	test("combines SELECT with WHERE, ORDER BY, and LIMIT", () => {
-		const stmt = db.prepare<{ minAge: number }>(
-			(ctx) => ctx.sql`
+		const stmt = db.sql<{ minAge: number }>`
    SELECT * FROM test_table
    ${
 			{
@@ -42,10 +41,13 @@ describe("SQL Context Generation", () => {
 			} as any
 		}
  `
-		)
 
 		assert.equal(
-			stmt.sourceSQL({ minAge: 18 }).trim(),
+			stmt
+				.sourceSQL({
+					minAge: 18,
+				})
+				.trim(),
 			"SELECT * FROM test_table\n   WHERE age > $minAge\nORDER BY name ASC\nLIMIT 10"
 		)
 	})
@@ -53,8 +55,7 @@ describe("SQL Context Generation", () => {
 	test("combines INSERT with VALUES and RETURNING", () => {
 		type TestRow = { name: string; age: number; metadata: object }
 
-		const stmt = db.prepare<TestRow>(
-			(ctx) => ctx.sql`
+		const stmt = db.sql<TestRow>`
    INSERT INTO test_table
    ${{
 			values: ["$name", "$age", "$metadata->json"],
@@ -62,14 +63,15 @@ describe("SQL Context Generation", () => {
 			returning: ["id", "created_at"] as any,
 		}}
  `
-		)
 
 		assert.equal(
 			stmt
 				.sourceSQL({
 					name: "test",
 					age: 25,
-					metadata: { tags: ["test"] },
+					metadata: {
+						tags: ["test"],
+					},
 				})
 				.trim(),
 			"INSERT INTO test_table\n   (name, age, metadata)\nVALUES ($name, $age, jsonb($metadata))\nRETURNING id, created_at"
@@ -79,8 +81,7 @@ describe("SQL Context Generation", () => {
 	test("combines UPDATE with SET, WHERE and RETURNING", () => {
 		type UpdateRow = { id: number; name: string; metadata: object }
 
-		const stmt = db.prepare<UpdateRow>(
-			(ctx) => ctx.sql`
+		const stmt = db.sql<UpdateRow>`
    UPDATE test_table
    ${{
 			set: ["$name", "$metadata->json"],
@@ -88,14 +89,15 @@ describe("SQL Context Generation", () => {
 			returning: "*",
 		}}
  `
-		)
 
 		assert.equal(
 			stmt
 				.sourceSQL({
 					id: 1,
 					name: "updated",
-					metadata: { updated: true },
+					metadata: {
+						updated: true,
+					},
 				})
 				.trim(),
 			"UPDATE test_table\n   SET name = $name,\n  metadata = jsonb($metadata)\nWHERE id = $id\nRETURNING *"
@@ -105,8 +107,7 @@ describe("SQL Context Generation", () => {
 	test("combines complex WHERE conditions with ORDER BY and LIMIT/OFFSET", () => {
 		type QueryRow = { minAge: number; pattern: string }
 
-		const stmt = db.prepare<QueryRow>(
-			(ctx) => ctx.sql`
+		const stmt = db.sql<QueryRow>`
    SELECT * FROM test_table
    ${{
 			// biome-ignore lint/suspicious/noExplicitAny: <explanation>
@@ -117,10 +118,14 @@ describe("SQL Context Generation", () => {
 			offset: 40,
 		}}
  `
-		)
 
 		assert.equal(
-			stmt.sourceSQL({ minAge: 18, pattern: "test%" }).trim(),
+			stmt
+				.sourceSQL({
+					minAge: 18,
+					pattern: "test%",
+				})
+				.trim(),
 			"SELECT * FROM test_table\n   WHERE age > $minAge AND name LIKE $pattern\nORDER BY age DESC, name ASC\nLIMIT 20\nOFFSET 40"
 		)
 	})
@@ -132,8 +137,7 @@ describe("SQL Context Generation", () => {
 			settings: { theme: string }
 		}
 
-		const stmt = db.prepare<InsertRow>(
-			(ctx) => ctx.sql`
+		const stmt = db.sql<InsertRow>`
     INSERT INTO test_table
     ${{
 			values: ["$name", "$metadata->json", "$settings->json"],
@@ -141,14 +145,17 @@ describe("SQL Context Generation", () => {
 			returning: ["id", "created_at"] as any,
 		}}
   `
-		)
 
 		assert.equal(
 			stmt
 				.sourceSQL({
 					name: "test",
-					metadata: { tags: ["a", "b"] },
-					settings: { theme: "dark" },
+					metadata: {
+						tags: ["a", "b"],
+					},
+					settings: {
+						theme: "dark",
+					},
 				})
 				.trim(),
 			"INSERT INTO test_table\n    (name, metadata, settings)\nVALUES ($name, jsonb($metadata), jsonb($settings))\nRETURNING id, created_at"

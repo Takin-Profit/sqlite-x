@@ -1,6 +1,52 @@
 // Copyright 2025 Takin Profit. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+import type { StatementSync } from "node:sqlite"
+import type {
+	FormatterConfig,
+	Sql,
+	SqlTemplateValues,
+	XStatementSync,
+} from "#sql"
+import type { CacheStats, StatementCacheOptions } from "#cache"
+import type { PragmaConfig } from "#pragmas"
+import type { Logger } from "#logger"
+
+export type CleanupPragmas = {
+	optimize?: boolean
+	shrinkMemory?: boolean
+	walCheckpoint?: "PASSIVE" | "FULL" | "RESTART" | "TRUNCATE"
+}
+
+export interface DBOptions {
+	location?: string | ":memory:"
+	statementCache?: boolean | StatementCacheOptions
+	pragma?: PragmaConfig
+	environment?: "development" | "testing" | "production"
+	logger?: Logger
+	format?: FormatterConfig
+}
+
+/**
+ * Function type for SQL template literal tag
+ */
+export type SqlFn<P extends DataRow> = (
+	strings: TemplateStringsArray,
+	...params: SqlTemplateValues<P>
+) => Sql<P>
+
+export interface IDatabase {
+	prepareStatement(sql: string): StatementSync
+	prepare<P extends DataRow, R = unknown>(
+		builder: (sql: SqlFn<P>) => Sql<P>
+	): XStatementSync<P, R>
+	exec(sql: string): void
+	backup(filename: string): void
+	restore(filename: string): void
+	getCacheStats(): CacheStats | undefined
+	clearStatementCache(): void
+	close(pragmas?: CleanupPragmas): void
+}
 
 export const COMPARISON_OPERATORS = [
 	"=",

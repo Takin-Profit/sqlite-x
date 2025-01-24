@@ -45,7 +45,7 @@ describe("SQL Context Validation", async () => {
 			}
 			const errors = validateSqlContext<TestUser>(context)
 			assert.equal(errors.length, 2)
-			assert.ok(errors.every((e) => e.message.startsWith("Unknown property:")))
+			assert.ok(errors.every(e => e.message.startsWith("Unknown property:")))
 		})
 	})
 
@@ -89,7 +89,7 @@ describe("SQL Context Validation", async () => {
 			const errors = validateSqlContext<TestUser>(context)
 			assert.ok(errors.length > 0)
 			assert.ok(
-				errors.every((e) =>
+				errors.every(e =>
 					e.message.includes("Invalid parameter operator format")
 				)
 			)
@@ -167,7 +167,7 @@ describe("SQL Context Validation", async () => {
 			const errors = validateSqlContext<TestUser>(context)
 			assert.equal(errors.length, 2)
 			assert.ok(
-				errors.every((e) => e.message.includes("Order direction must be"))
+				errors.every(e => e.message.includes("Order direction must be"))
 			)
 		})
 	})
@@ -189,12 +189,8 @@ describe("SQL Context Validation", async () => {
 			}
 			const errors = validateSqlContext<TestUser>(context)
 			assert.equal(errors.length, 2)
-			assert.ok(
-				errors.some((e) => e.message.includes("limit must be a number"))
-			)
-			assert.ok(
-				errors.some((e) => e.message.includes("offset must be a number"))
-			)
+			assert.ok(errors.some(e => e.message.includes("limit must be a number")))
+			assert.ok(errors.some(e => e.message.includes("offset must be a number")))
 		})
 	})
 

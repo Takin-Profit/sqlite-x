@@ -256,10 +256,11 @@ describe("Values Context SQL Generation", () => {
 	})
 
 	test("generates correct SQL for basic values", () => {
-		const stmt = db.prepare<{ simple_text: string; data_one: string }>(
-			(ctx) =>
-				ctx.sql`INSERT INTO test_data ${{ values: ["$simple_text", "$data_one"] }}`
-		)
+		const stmt = db.sql<{
+			simple_text: string
+			data_one: string
+		}>`INSERT INTO test_data ${{ values: ["$simple_text", "$data_one"] }}`
+
 		assert.equal(
 			stmt.sourceSQL({ simple_text: "test", data_one: "data" }).trim(),
 			"INSERT INTO test_data (simple_text, data_one)\nVALUES ($simple_text, $data_one)"
@@ -272,10 +273,8 @@ describe("Values Context SQL Generation", () => {
 			data_one: { value: string }
 		}
 
-		const stmt = db.prepare<TestData>(
-			(ctx) =>
-				ctx.sql`INSERT INTO test_data ${{ values: ["$simple_text", "$data_one->json"] }}`
-		)
+		const stmt = db.sql<TestData>`INSERT INTO test_data ${{ values: ["$simple_text", "$data_one->json"] }}`
+
 		assert.equal(
 			stmt
 				.sourceSQL({ simple_text: "test", data_one: { value: "test value" } })
@@ -291,12 +290,10 @@ describe("Values Context SQL Generation", () => {
 			data_two: { count: number }
 		}
 
-		const stmt = db.prepare<TestData>(
-			(ctx) =>
-				ctx.sql`INSERT INTO test_data ${{
-					values: ["$simple_text", "$data_one->json", "$data_two->json"],
-				}}`
-		)
+		const stmt = db.sql<TestData>`INSERT INTO test_data ${{
+			values: ["$simple_text", "$data_one->json", "$data_two->json"],
+		}}`
+
 		assert.equal(
 			stmt
 				.sourceSQL({
@@ -316,12 +313,10 @@ describe("Values Context SQL Generation", () => {
 			data_two: { count: number }
 		}
 
-		const stmt = db.prepare<TestData>(
-			(ctx) =>
-				ctx.sql`INSERT INTO test_data ${{
-					values: ["*", { jsonColumns: ["data_one", "data_two"] }],
-				}}`
-		)
+		const stmt = db.sql<TestData>`INSERT INTO test_data ${{
+			values: ["*", { jsonColumns: ["data_one", "data_two"] }],
+		}}`
+
 		assert.equal(
 			stmt
 				.sourceSQL({
@@ -362,10 +357,11 @@ describe("Values Context SQL Generation", () => {
 	})
 
 	test("generates formatted SQL for basic values", () => {
-		const stmt = db.prepare<{ simple_text: string; data_one: string }>(
-			(ctx) =>
-				ctx.sql`INSERT INTO test_data ${{ values: ["$simple_text", "$data_one"] }}`
-		)
+		const stmt = db.sql<{
+			simple_text: string
+			data_one: string
+		}>`INSERT INTO test_data ${{ values: ["$simple_text", "$data_one"] }}`
+
 		assert.equal(
 			stmt
 				.sourceSQL({
@@ -385,18 +381,15 @@ describe("Values Context SQL Generation", () => {
 			tags: string[]
 		}
 
-		const stmt = db.prepare<ComplexData>(
-			(ctx) =>
-				ctx.sql`INSERT INTO test_data ${{
-					values: [
-						"$simple_text",
-						"$metadata->json",
-						"$settings->json",
-						"$config->json",
-						"$tags->json",
-					],
-				}}`
-		)
+		const stmt = db.sql<ComplexData>`INSERT INTO test_data ${{
+			values: [
+				"$simple_text",
+				"$metadata->json",
+				"$settings->json",
+				"$config->json",
+				"$tags->json",
+			],
+		}}`
 
 		assert.equal(
 			stmt
@@ -422,23 +415,21 @@ describe("Values Context SQL Generation", () => {
 			config: { [key: string]: unknown }
 		}
 
-		const stmt = db.prepare<AllJsonData>(
-			(ctx) =>
-				ctx.sql`INSERT INTO test_data ${{
-					values: [
-						"*",
-						{
-							jsonColumns: [
-								"data_one",
-								"data_two",
-								"metadata",
-								"settings",
-								"config",
-							],
-						},
+		const stmt = db.sql<AllJsonData>`INSERT INTO test_data ${{
+			values: [
+				"*",
+				{
+					jsonColumns: [
+						"data_one",
+						"data_two",
+						"metadata",
+						"settings",
+						"config",
 					],
-				}}`
-		)
+				},
+			],
+		}}`
+
 		assert.equal(
 			stmt
 				.sourceSQL({

@@ -39,21 +39,17 @@ test("handles simple object JSON storage and retrieval", { only: true }, () => {
 		active: true,
 	}
 
-	const insertData = db.prepare<{ data: SimpleObject }>(
-		({ sql }) => sql`
+	const insertData = db.sql<{ data: SimpleObject }>`
       INSERT INTO json_test (simple_object)
       VALUES (${"$data->json"})
     `
-	)
 
 	insertData.run({ data: simpleObject })
 
-	const getData = db.prepare<Record<string, never>>(
-		({ sql }) => sql`
+	const getData = db.sql<Record<string, never>>`
       SELECT json_extract(simple_object, '$') as data
       FROM json_test
     `
-	)
 
 	const result = getData.all<{ data: SimpleObject }>({})
 	assert.deepEqual(result[0].data, simpleObject)
@@ -100,21 +96,17 @@ test("handles nested object JSON storage and retrieval", () => {
 		},
 	}
 
-	const insertData = db.prepare<{ data: NestedObject }>(
-		({ sql }) => sql`
+	const insertData = db.sql<{ data: NestedObject }>`
       INSERT INTO json_test (nested_object)
       VALUES (${"$data->json"})
     `
-	)
 
 	insertData.run({ data: nestedObject })
 
-	const getData = db.prepare<Record<string, never>>(
-		({ sql }) => sql`
+	const getData = db.sql<Record<string, never>>`
       SELECT json_extract(nested_object, '$') as data
       FROM json_test
     `
-	)
 
 	const result = getData.all<{ data: NestedObject }>({})
 	assert.deepEqual(result[0].data, nestedObject)
@@ -139,19 +131,16 @@ test("handles multiple row JSON operations", () => {
     )
   `)
 
-	const insertRows = db.prepare<{ data: RowData }>(
-		({ sql }) => sql`
+	const insertRows = db.sql<{ data: RowData }>`
       INSERT INTO multi_test (data)
       VALUES (${"$data->json"})
     `
-	)
 
 	for (const row of rows) {
 		insertRows.run({ data: row })
 	}
 
-	const getRows = db.prepare<Record<string, never>>(
-		({ sql }) => sql`
+	const getRows = db.sql<Record<string, never>>`
     SELECT
       id,
       json_extract(data, '$') as data,
@@ -159,7 +148,6 @@ test("handles multiple row JSON operations", () => {
     FROM multi_test
     ORDER BY id
   `
-	)
 
 	const result = getRows.all<{ id: number; data: RowData; created_at: string }>(
 		{}
@@ -199,17 +187,14 @@ test("handles JSON path queries", () => {
 		},
 	}
 
-	const insertData = db.prepare<{ data: TestData }>(
-		({ sql }) => sql`
+	const insertData = db.sql<{ data: TestData }>`
       INSERT INTO json_test (nested_object)
       VALUES (${"$data->json"})
     `
-	)
 
 	insertData.all({ data })
 
-	const getData = db.prepare<Record<string, never>>(
-		({ sql }) => sql`
+	const getData = db.sql<Record<string, never>>`
       SELECT
         json_extract(nested_object, '$') as data,
         json_extract(nested_object, '$.users[0].name') as first_user_name,
@@ -218,7 +203,6 @@ test("handles JSON path queries", () => {
         json_extract(nested_object, '$.config.features.flag1') as feature_flag
       FROM json_test
     `
-	)
 
 	const result = getData.all<{
 		data: TestData
@@ -274,17 +258,14 @@ test("handles array of objects with mixed types", () => {
 		],
 	}
 
-	const insertData = db.prepare<{ data: ComplexArray }>(
-		({ sql }) => sql`
+	const insertData = db.sql<{ data: ComplexArray }>`
       INSERT INTO json_test (array_data)
       VALUES (${"$data->json"})
     `
-	)
 
 	insertData.run({ data: testData })
 
-	const getData = db.prepare<Record<string, never>>(
-		({ sql }) => sql`
+	const getData = db.sql<Record<string, never>>`
       SELECT
         json_extract(array_data, '$') as full_data,
         json_extract(array_data, '$.items[0].metadata.tags[0]') as first_tag,
@@ -292,7 +273,6 @@ test("handles array of objects with mixed types", () => {
         json_extract(array_data, '$.items[1].metadata.active') as is_active
       FROM json_test
     `
-	)
 
 	const result = getData.all<{
 		full_data: ComplexArray
@@ -323,17 +303,14 @@ test("handles null and empty JSON values", () => {
 		emptyArray: [],
 	}
 
-	const insertData = db.prepare<{ data: NullableData }>(
-		({ sql }) => sql`
+	const insertData = db.sql<{ data: NullableData }>`
       INSERT INTO json_test (nullable_json)
       VALUES (${"$data->json"})
     `
-	)
 
 	insertData.run({ data: testData })
 
-	const getData = db.prepare<Record<string, never>>(
-		({ sql }) => sql`
+	const getData = db.sql<Record<string, never>>`
       SELECT
         json_extract(nullable_json, '$') as data,
         json_extract(nullable_json, '$.optional') as missing_value,
@@ -342,7 +319,6 @@ test("handles null and empty JSON values", () => {
         json_extract(nullable_json, '$.emptyArray') as empty_array
       FROM json_test
     `
-	)
 
 	const result = getData.all<{
 		data: NullableData
@@ -379,12 +355,10 @@ test("handles JSON updates", () => {
 	}
 
 	// Insert initial data
-	const insertData = db.prepare<{ data: UpdateData }>(
-		({ sql }) => sql`
+	const insertData = db.sql<{ data: UpdateData }>`
       INSERT INTO json_test (mixed_data)
       VALUES (${"$data->json"})
     `
-	)
 
 	insertData.run({ data: initialData })
 
@@ -398,22 +372,18 @@ test("handles JSON updates", () => {
 		},
 	}
 
-	const updateData = db.prepare<{ data: UpdateData }>(
-		({ sql }) => sql`
+	const updateData = db.sql<{ data: UpdateData }>`
       UPDATE json_test
       SET mixed_data = ${"$data->json"}
     `
-	)
 
 	updateData.run({ data: updatedData })
 
 	// Verify the update
-	const getData = db.prepare<Record<string, never>>(
-		({ sql }) => sql`
+	const getData = db.sql<Record<string, never>>`
       SELECT json_extract(mixed_data, '$') as data
       FROM json_test
     `
-	)
 
 	const result = getData.all<{ data: UpdateData }>({})
 	assert.deepEqual(result[0].data, updatedData)
@@ -442,24 +412,20 @@ test("handles nested JSON array operations", () => {
 		],
 	}
 
-	const insertData = db.prepare<{ data: NestedArrayData }>(
-		({ sql }) => sql`
+	const insertData = db.sql<{ data: NestedArrayData }>`
       INSERT INTO json_test (array_data)
-      VALUES (${"$data->json"})
-    `
-	)
+      VALUES (${"$data->json"})`
 
-	insertData.run({ data: testData })
+	insertData.run({
+		data: testData,
+	})
 
-	const getData = db.prepare<Record<string, never>>(
-		({ sql }) => sql`
+	const getData = db.sql<Record<string, never>>`
       SELECT
         json_extract(array_data, '$') as data,
         json_extract(array_data, '$.matrix[1][1]') as center_value,
         json_extract(array_data, '$.objects[1].nested.values[0]') as nested_value
-      FROM json_test
-    `
-	)
+      FROM json_test`
 
 	const result = getData.all<{
 		data: NestedArrayData
@@ -490,22 +456,18 @@ test("handles fromJson when querying stored JSON data", () => {
 	}
 
 	// First store the JSON data using toJson
-	const insertUser = db.prepare<{ user_data: UserData }>(
-		({ sql }) => sql`
+	const insertUser = db.sql<{ user_data: UserData }>`
     INSERT INTO json_test (simple_object)
-    VALUES (${"$user_data->json"})
-  `
-	)
+    VALUES (${"$user_data->json"})`
 
-	insertUser.run({ user_data: userData })
+	insertUser.run({
+		user_data: userData,
+	})
 
 	// Now query it back using fromJson
-	const getUser = db.prepare<Record<string, never>>(
-		({ sql }) => sql`
+	const getUser = db.sql<Record<string, never>>`
     SELECT ${"$simple_object<-json"} as user_data
-    FROM json_test
-  `
-	)
+    FROM json_test`
 
 	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 	const result = getUser.all<any>({})
@@ -544,25 +506,22 @@ test("handles fromJson with nested JSON fields", () => {
 	}
 
 	// Store the data
-	const insertData = db.prepare<{ data: ComplexData }>(
-		({ sql }) => sql`
+	const insertData = db.sql<{ data: ComplexData }>`
     INSERT INTO json_test (nested_object)
-    VALUES (${"$data->json"})
-  `
-	)
+    VALUES (${"$data->json"})`
 
-	insertData.run({ data: testData })
+	insertData.run({
+		data: testData,
+	})
 
 	// Query specific nested fields using fromJson
-	const getData = db.prepare<Record<string, never>>(
-		({ sql }) => sql`
+	const getData = db.sql<Record<string, never>>`
     SELECT
       ${"$nested_object<-json"} as full_data,
       json(json_extract(nested_object, '$.metadata.tags')) as tags,
       json(json_extract(nested_object, '$.metadata.nested.flags')) as flags
     FROM json_test
 `
-	)
 	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 	const result = getData.all<any>({})
 	assert.deepEqual(result[0].full_data, testData)
@@ -595,24 +554,21 @@ test("handles mixed query with multiple fromJson operations", () => {
 	}
 
 	// Store both JSON objects
-	const insertData = db.prepare<{ profile: UserProfile; meta: UserMetadata }>(
-		({ sql }) => sql`
+	const insertData = db.sql<{ profile: UserProfile; meta: UserMetadata }>`
     INSERT INTO json_test (simple_object, nested_object)
-    VALUES (${"$profile->json"}, ${"$meta->json"})
-  `
-	)
+    VALUES (${"$profile->json"}, ${"$meta->json"})`
 
-	insertData.run({ profile, meta: metadata })
+	insertData.run({
+		profile,
+		meta: metadata,
+	})
 
 	// Query both JSON fields using fromJson
-	const getData = db.prepare<Record<string, never>>(
-		({ sql }) => sql`
+	const getData = db.sql<Record<string, never>>`
     SELECT
       ${"$simple_object<-json"} as profile,
       ${"$nested_object<-json"} as metadata
-    FROM json_test
-  `
-	)
+    FROM json_test`
 
 	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 	const result = getData.all<any>({})

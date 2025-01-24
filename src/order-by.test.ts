@@ -59,12 +59,10 @@ describe("OrderBy Context SQL Generation", () => {
       );
     `)
 
-		const insert = db.prepare<{ name: string; age: number; email: string }>(
-			(ctx) => ctx.sql`
+		const insert = db.sql<{ name: string; age: number; email: string }>`
         INSERT INTO users (name, age, email)
         VALUES (${"$name"}, ${"$age"}, ${"$email"})
       `
-		)
 
 		insert.run({ name: "John", age: 30, email: "john@example.com" })
 		insert.run({ name: "Alice", age: 25, email: "alice@example.com" })
@@ -76,12 +74,10 @@ describe("OrderBy Context SQL Generation", () => {
 	})
 
 	test("generates and executes formatted ORDER BY clause", () => {
-		const query = db.prepare<Record<string, never>>(
-			(ctx) => ctx.sql`
+		const query = db.sql<Record<string, never>>`
         SELECT * FROM users
         ${{ orderBy: { name: "ASC", age: "DESC" } }}
       `
-		)
 
 		const results = query.all<{ name: string; age: number }>({})
 

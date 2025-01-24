@@ -134,8 +134,7 @@ describe("Columns Context SQL Generation", () => {
 			data: object
 		}
 
-		const stmt = db.prepare<TestTable>(
-			(ctx) => ctx.sql`
+		const stmt = db.sql<TestTable>`
       CREATE TABLE test_table ${{
 				columns: {
 					id: "INTEGER PRIMARY KEY AUTOINCREMENT",
@@ -145,7 +144,6 @@ describe("Columns Context SQL Generation", () => {
 				},
 			}};
     `
-		)
 
 		assert.equal(
 			stmt.sourceSQL({} as TestTable).trim(),
@@ -159,15 +157,13 @@ describe("Columns Context SQL Generation", () => {
 			name: string
 		}
 
-		const stmt = db.prepare<TestTable>(
-			(ctx) => ctx.sql`
+		const stmt = db.sql<TestTable>`
       CREATE TABLE test_table (
         id INTEGER PRIMARY KEY,
         name TEXT
       );
       INSERT INTO test_table ${{ values: ["$id", "$name"] }}
     `
-		)
 
 		assert.equal(
 			stmt.sourceSQL({ id: 1, name: "test" }).trim(),

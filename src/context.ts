@@ -463,7 +463,7 @@ export function buildColsStatement<P extends DataRow>(
 	cols: (keyof P | FromJson<P> | ToJson<P>)[] | "*"
 ): string {
 	if (cols === "*") {
-		return "SELECT *"
+		return "*" // Remove "SELECT" prefix
 	}
 
 	const columnsList = cols.map(col => {
@@ -481,5 +481,5 @@ export function buildColsStatement<P extends DataRow>(
 		return String(col)
 	})
 
-	return `SELECT ${columnsList.join(", ")}`
+	return columnsList.join(", ") // Remove "SELECT" prefix
 }

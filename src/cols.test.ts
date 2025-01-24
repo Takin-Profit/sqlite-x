@@ -20,12 +20,12 @@ interface TestUser {
 describe("buildColsStatement", () => {
 	test("handles '*' selector", () => {
 		const sql = buildColsStatement<TestUser>("*")
-		assert.equal(sql, "SELECT *")
+		assert.equal(sql, "*")
 	})
 
 	test("handles basic column selection", () => {
 		const sql = buildColsStatement<TestUser>(["id", "name", "active"])
-		assert.equal(sql, "SELECT id, name, active")
+		assert.equal(sql, "id, name, active")
 	})
 
 	test("handles JSON extraction", () => {
@@ -34,7 +34,7 @@ describe("buildColsStatement", () => {
 			"metadata<-json",
 			// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 		] as any)
-		assert.equal(sql, "SELECT id, json_extract(metadata, '$')")
+		assert.equal(sql, "id, json_extract(metadata, '$')")
 	})
 
 	test("handles JSON insertion", () => {
@@ -43,7 +43,7 @@ describe("buildColsStatement", () => {
 			"settings->json",
 			// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 		] as any)
-		assert.equal(sql, "SELECT id, jsonb(settings)")
+		assert.equal(sql, "id, jsonb(settings)")
 	})
 
 	test("handles mixed JSON operations", () => {
@@ -56,7 +56,7 @@ describe("buildColsStatement", () => {
 		] as any)
 		assert.equal(
 			sql,
-			"SELECT id, json_extract(metadata, '$'), jsonb(settings), active"
+			"id, json_extract(metadata, '$'), jsonb(settings), active"
 		)
 	})
 })

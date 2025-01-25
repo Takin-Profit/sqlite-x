@@ -1,190 +1,520 @@
-# @takinprofit/sqlite-x
+# @takinprofit/sqlitex
 
-A modern type-safe SQLite wrapper for Node.js/TypeScript.
+A powerful, type-safe SQLite query builder and database wrapper for Node.js, featuring prepared statement caching, JSON column support, and SQL template literals.
+
+[![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![npm version](https://badge.fury.io/js/@takinprofit%2Fsqlitex.svg)](https://www.npmjs.com/package/@takinprofit/sqlitex)
+
+## Table of Contents
+
+- [@takinprofit/sqlitex](#takinprofitsqlitex)
+  - [Table of Contents](#table-of-contents)
+  - [Features](#features)
+  - [Installation](#installation)
+  - [Quick Start](#quick-start)
+  - [Core Concepts](#core-concepts)
+    - [Database Connection](#database-connection)
+    - [SQL Template Literals and SqlContext](#sql-template-literals-and-sqlcontext)
+    - [Type Safety](#type-safety)
+    - [JSON Support](#json-support)
+  - [Advanced Usage](#advanced-usage)
+    - [Query Building](#query-building)
+    - [PRAGMA Configuration](#pragma-configuration)
+    - [Statement Caching](#statement-caching)
+    - [Backup and Restore](#backup-and-restore)
+  - [API Reference](#api-reference)
+  - [Contributing](#contributing)
+  - [License](#license)
+
+## Features
+
+- 🔒 **Type-safe SQL template literals**
+- 🚀 **Prepared statement caching**
+- 📦 **First-class JSON column support**
+- 🛠️ **Strong schema validation**
+- 🔄 **SQL query composition**
+- ⚙️ **Comprehensive PRAGMA configuration**
+- 🌟 **Modern async/iterator support**
 
 ## Installation
 
 ```bash
-npm install @takinprofit/sqlite-x
+npm install @takinprofit/sqlitex
 ```
 
-## Features
-
-- 🚀 Type-safe query building
-- 🔒 Built-in statement caching
-- 📦 Backup and restore functionality
-- ⚡ Modern ES modules support
-- 🛡️ Strict type checking
-- 🎯 Native Node.js SQLite bindings
-
-## Usage
-
-### Database Setup
+## Quick Start
 
 ```typescript
-import { DB } from '@takinprofit/sqlite-x';
-import { ConsoleLogger, LogLevel } from '@takinprofit/sqlite-x/logger';
+import { DB } from '@takinprofit/sqlitex';
 
+// Create a database connection
 const db = new DB({
-  location: 'path/to/database.db',
-  environment: 'production',
-  logger: new ConsoleLogger(LogLevel.ERROR),
+  location: ':memory:',
+  environment: 'development'
 });
-```
 
-### Inserting Data
+// Define your table type
+interface User {
+  id: number;
+  name: string;
+  age: number;
+  metadata: {
+    preferences: {
+      theme: string;
+      notifications: boolean;
+    };
+  };
+}
 
-```typescript
-const insertUser = db.mutate<{ name: string; age: number; email: string }>(
-  ({ sql }) => sql`
-    INSERT INTO users (name, age, email)
-    VALUES (${"name"}, ${"age"}, ${"email"})
-  `
-);
+// Create a table
+db.exec(`
+  CREATE TABLE users (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    age INTEGER,
+    metadata TEXT
+  )
+`);
 
-const result = insertUser({
-  name: "John",
+// Insert with type safety and JSON support
+const insert = db.sql<User>`
+  INSERT INTO users (name, age, metadata)
+  VALUES (${'$name'}, ${'$age'}, ${'$metadata->json'})
+`;
+
+insert.run({
+  name: 'John Doe',
   age: 30,
-  email: "john@example.com"
+  metadata: {
+    preferences: {
+      theme: 'dark',
+      notifications: true
+    }
+  }
 });
 
-// Returns: { changes: 1, lastInsertRowid: number }
+// Type-safe queries with automatic JSON parsing
+const getUser = db.sql<{id: number}>`
+  SELECT *, json_extract(metadata, '$') as metadata
+  FROM users
+  WHERE id = ${'$id'}
+`;
+
+const user = getUser.get({ id: 1 });
+console.log(user.metadata.preferences.theme); // 'dark'
 ```
 
-### Querying Data
+## Core Concepts
+
+### Database Connection
+
+SQLiteX provides comprehensive database configuration through the `DBOptions` interface:
 
 ```typescript
-const getUsers = db.query<{ minAge: number }>(
-  ({ sql }) => sql`
-    SELECT name, age, email
-    FROM users
-    WHERE age >= ${"minAge"}
-  `
-);
+interface DBOptions {
+  // Database file path or ":memory:" for in-memory database
+  location?: string | ":memory:"
 
-const users = getUsers<Array<{ name: string; age: number; email: string }>>({
-  minAge: 28
+  // Statement cache configuration - boolean for defaults or detailed options
+  statementCache?: boolean | {
+    maxSize: number
+    maxAge?: number
+  }
+
+  // SQLite PRAGMA settings
+  pragma?: {
+    journalMode?: "DELETE" | "TRUNCATE" | "PERSIST" | "MEMORY" | "WAL" | "OFF"
+    synchronous?: "OFF" | "NORMAL" | "FULL" | "EXTRA"
+    cacheSize?: number
+    mmapSize?: number
+    tempStore?: "DEFAULT" | "FILE" | "MEMORY"
+    lockingMode?: "NORMAL" | "EXCLUSIVE"
+    busyTimeout?: number
+    foreignKeys?: boolean
+    walAutocheckpoint?: number
+    trustedSchema?: boolean
+  }
+
+  // Runtime environment affecting default PRAGMA settings
+  environment?: "development" | "testing" | "production"
+
+  // Custom logger implementation
+  logger?: Logger
+
+  // SQL formatting configuration
+  format?: {
+    indent?: string
+    reservedWordCase?: "upper" | "lower"
+    linesBetweenQueries?: number | "preserve"
+  } | false
+}
+
+// Example usage with various options:
+const db = new DB({
+  location: 'path/to/db.sqlite',
+  environment: 'production',
+  statementCache: {
+    maxSize: 100,
+    maxAge: 3600000 // 1 hour
+  },
+  pragma: {
+    journalMode: 'WAL',
+    synchronous: 'NORMAL',
+    foreignKeys: true,
+    busyTimeout: 5000
+  },
+  format: {
+    indent: '  ',
+    reservedWordCase: 'upper',
+    linesBetweenQueries: 1
+  }
 });
 ```
 
-### Complex Queries
+### SQL Template Literals and SqlContext
+
+SQLiteX provides a powerful SQL template literal system combined with the `SqlContext` interface for type-safe query building:
 
 ```typescript
-const getUsers = db.query<{ minAge: number; nameLike: string }>(
-  ({ sql }) => sql`
-    SELECT * FROM users
-    WHERE age >= ${"minAge"}
-    AND name LIKE ${"nameLike"}
-  `
-);
+interface SqlContext<P extends DataRow> {
+  // Column selection for SELECT statements
+  cols?: (keyof P | FromJson<P> | ToJson<P>)[] | "*"
 
-const results = getUsers<Array<{ name: string; age: number }>>({
-  minAge: 25,
-  nameLike: "J%"
+  // Values for INSERT statements
+  values?: InsertOptions<P>
+
+  // Column updates for UPDATE statements
+  set?: SetOptions<P>
+
+  // WHERE clause conditions
+  where?: WhereClause<P>
+
+  // ORDER BY configuration
+  orderBy?: Partial<Record<keyof P, "ASC" | "DESC">>
+
+  // LIMIT and OFFSET
+  limit?: number
+  offset?: number
+
+  // RETURNING clause
+  returning?: (keyof P)[] | "*"
+
+  // Column definitions for CREATE TABLE
+  columns?: Columns<P>
+}
+
+// Examples using SqlContext:
+
+interface Post {
+  id: number;
+  title: string;
+  userId: number;
+  tags: string[];
+  metadata: {
+    views: number;
+    lastModified: string;
+  };
+  status: 'draft' | 'published';
+}
+
+// INSERT with JSON and returning values
+const createPost = db.sql<Post>`
+  INSERT INTO posts
+  ${{
+    values: ['$title', '$userId', '$tags->json', '$metadata->json', '$status'],
+    returning: ['id', 'created_at']
+  }}
+`;
+
+// Complex SELECT with multiple conditions
+const getPosts = db.sql<{
+  userId: number,
+  minViews: number,
+  status: string
+}>`
+  SELECT ${{
+    cols: ['id', 'title', 'metadata<-json', 'tags<-json']
+  }}
+  FROM posts
+  ${{
+    where: [
+      'userId = $userId',
+      'AND',
+      'json_extract(metadata, "$.views") > $minViews',
+      'AND',
+      'status = $status'
+    ],
+    orderBy: {
+      id: 'DESC'
+    },
+    limit: 10
+  }}
+`;
+
+// Query Composition Examples
+
+// Base query
+let query = db.sql<{
+  status: string,
+  userId?: number,
+  search?: string
+}>`SELECT ${{
+  cols: ['posts.*', 'metadata<-json', 'users.name as author']
+}} FROM posts
+LEFT JOIN users ON posts.userId = users.id`;
+
+// Conditional WHERE clauses
+if (params.status) {
+  query = query.sql`${{
+    where: 'status = $status'
+  }}`;
+}
+
+// Add user filter if provided
+if (params.userId) {
+  query = query.sql`${{
+    where: ['posts.userId = $userId']
+  }}`;
+}
+
+// Add search condition if needed
+if (params.search) {
+  query = query.sql`${{
+    where: ['title LIKE $search']
+  }}`;
+}
+
+// Finalize with ordering and limits
+query = query.sql`${{
+  orderBy: {
+    'posts.created_at': 'DESC'
+  },
+  limit: 20
+}}`;
+
+// UPDATE example with JSON modification
+const updatePost = db.sql<Post & { newTags: string[] }>`
+  UPDATE posts
+  ${{
+    set: [
+      '$title',
+      '$status',
+      '$metadata->json',
+      // Merge existing tags with new ones using JSON functions
+      'tags = json_array(json_group_array(
+        DISTINCT value)
+      ) FROM (
+        SELECT value FROM json_each($tags)
+        UNION
+        SELECT value FROM json_each($newTags)
+      )'
+    ],
+    where: 'id = $id',
+    returning: '*'
+  }}
+`;
+```
+
+### Type Safety
+
+SQLiteX provides comprehensive type safety:
+
+```typescript
+interface Article {
+  id: number;
+  title: string;
+  views: number;
+  metadata: {
+    authors: string[];
+    categories: string[];
+  };
+}
+
+// Column definitions are type-checked
+const createTable = db.sql<Article>`
+  CREATE TABLE articles ${
+    columns: {
+      id: 'INTEGER PRIMARY KEY',
+      title: 'TEXT NOT NULL',
+      views: 'INTEGER DEFAULT 0',
+      metadata: 'TEXT'  // For JSON storage
+    }
+  }
+`;
+
+// Query parameters are type-checked
+const updateViews = db.sql<Article>`
+  UPDATE articles
+  ${{
+    set: ['$views'],
+    where: 'id = $id',
+    returning: ['views']
+  }}
+`;
+
+// This will cause a type error
+updateViews.run({
+  id: 1,
+  views: 'invalid'  // Type error: expected number
 });
 ```
 
-### Updating Data
+### JSON Support
+
+First-class JSON column support with type safety:
 
 ```typescript
-const updateUser = db.mutate<{ id: number | bigint; newAge: number }>(
-  ({ sql }) => sql`
-    UPDATE users
-    SET age = ${"newAge"}
-    WHERE id = ${"id"}
-  `
-);
+interface Product {
+  id: number;
+  name: string;
+  specs: {
+    dimensions: {
+      width: number;
+      height: number;
+    };
+    weight: number;
+  };
+  tags: string[];
+}
 
-const result = updateUser({
-  id: userId,
-  newAge: 31
+// Store JSON data
+const insertProduct = db.sql<Product>`
+  INSERT INTO products
+  ${{
+    values: ['$name', '$specs->json', '$tags->json']
+  }}
+`;
+
+// Query JSON data
+const getProduct = db.sql<{id: number}>`
+  SELECT
+    name,
+    json_extract(specs, '$.dimensions.width') as width,
+    ${'$specs<-json'} as specs,
+    ${'$tags<-json'} as tags
+  FROM products
+  WHERE id = ${'$id'}
+`;
+```
+
+## Advanced Usage
+
+### Query Building
+
+SQLiteX provides a flexible query building API:
+
+```typescript
+interface Comment {
+  id: number;
+  postId: number;
+  userId: number;
+  content: string;
+  metadata: {
+    ip: string;
+    userAgent: string;
+  };
+}
+
+// Complex query composition
+const queryComments = db.sql<{
+  postId: number;
+  userId?: number;
+  limit?: number;
+}>`
+  SELECT
+    c.*,
+    ${'$metadata<-json'} as metadata
+  FROM comments c
+  ${({
+    where: [
+      'c.postId = $postId',
+      ...(params.userId ? ['AND', 'c.userId = $userId'] : [])
+    ],
+    orderBy: { id: 'DESC' },
+    limit: params.limit
+  })}
+`;
+```
+
+### PRAGMA Configuration
+
+Fine-tune SQLite behavior with PRAGMA settings:
+
+```typescript
+const db = new DB({
+  pragma: {
+    // Write-Ahead Logging
+    journalMode: 'WAL',
+
+    // Synchronization mode
+    synchronous: 'NORMAL',
+
+    // Cache settings
+    cacheSize: -64000,  // 64MB
+
+    // Memory-mapped I/O
+    mmapSize: 268435456,  // 256MB
+
+    // Busy handler timeout
+    busyTimeout: 5000,
+
+    // Enforce foreign key constraints
+    foreignKeys: true
+  }
 });
-```
-
-### Deleting Data
-
-```typescript
-const deleteUser = db.mutate<{ id: number | bigint }>(
-  ({ sql }) => sql`
-    DELETE FROM users
-    WHERE id = ${"id"}
-  `
-);
-
-const result = deleteUser({ id: userId });
-```
-
-### Backup and Restore
-
-```typescript
-// Create backup
-db.backup('path/to/backup.db');
-
-// Restore from backup
-db.restore('path/to/backup.db');
 ```
 
 ### Statement Caching
 
+Optimize performance with statement caching:
+
 ```typescript
 const db = new DB({
-  location: "database.db",
-  statementCache: { maxSize: 10 }
+  statementCache: {
+    maxSize: 1000,    // Maximum number of cached statements
+    maxAge: 3600000  // Maximum age in milliseconds (1 hour)
+  }
 });
 
-// Cache statistics
+// Get cache statistics
 const stats = db.getCacheStats();
+console.log(stats);  // { hits: 150, misses: 10, size: 100, ... }
+
+// Clear the cache if needed
 db.clearStatementCache();
 ```
 
-## Error Handling
+### Backup and Restore
 
-The library throws `NodeSqliteError` for all SQLite-related errors:
-
-```typescript
-try {
-  // Duplicate email
-  insertUser({
-    name: "Jane",
-    age: 25,
-    email: "existing@email.com"
-  });
-} catch (error) {
-  if (error instanceof NodeSqliteError) {
-    console.error("SQLite error:", error.message);
-    console.error("Code:", error.getPrimaryResultCode());
-  }
-}
-```
-
-## Configuration
+Manage database backups:
 
 ```typescript
-interface DBConfig {
-  location: string;
-  environment?: 'production' | 'development' | 'testing';
-  logger?: Logger;
-  statementCache?: { maxSize: number };
-}
+// Create a backup
+db.backup('backup.sqlite');
+
+// Restore from backup
+db.restore('backup.sqlite');
+
+// Clean shutdown
+db.close({
+  optimize: true,
+  shrinkMemory: true,
+  walCheckpoint: 'TRUNCATE'
+});
 ```
 
-## Development
+## API Reference
 
-```bash
-# Install dependencies
-npm install
+For detailed API documentation, please visit [API Docs](link-to-api-docs).
 
-# Run tests
-npm test
+## Contributing
 
-# Build project
-npm run build
-```
+Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details.
 
 ## License
 
-ISC
+This project is licensed under the BSD License - see the [LICENSE](LICENSE) file for details.
 
-## Author
+---
 
-Takin Profit
+Made with ❤️ by [Takin Profit](https://github.com/takinprofit)

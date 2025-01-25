@@ -346,7 +346,7 @@ export interface XStatementSync<P extends DataRow, RET = unknown> {
 	all<R = RET>(params?: P): R[]
 
 	/** Execute query and return an iterator over result rows */
-	iterate<R = RET>(params?: P): Iterator<R>
+	iter<R = RET>(params?: P): Iterator<R> & Iterable<R>
 
 	/** Execute query and return first result row or undefined */
 	get<R = RET>(params?: P): R | undefined
@@ -491,12 +491,14 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 			}
 		},
 
-		iterate<R = RET>(params: P = {} as P) {
+		iter<R = RET>(params: P = {} as P): Iterable<R> & Iterator<R> {
 			try {
 				const { stmt, namedParams, hasJsonColumns } = props.build(params)
-				// @ts-expect-error -- @types/node types are incomplete
+				// @ts-expect-error - @types/node is behind
 				const baseIterator = stmt.iterate(namedParams)
+
 				return {
+					// Iterator protocol
 					next(): IteratorResult<R> {
 						const result = baseIterator.next()
 						if (result.done) {
@@ -508,6 +510,11 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 								? (parseJsonColumns(result.value as DataRow) as R)
 								: (result.value as R),
 						}
+					},
+
+					// Iterable protocol
+					[Symbol.iterator]() {
+						return this
 					},
 				}
 			} catch (error) {

@@ -349,7 +349,7 @@ export interface XStatementSync<P extends DataRow, RET = unknown> {
 	iter<R = RET>(params?: P): Iterator<R> & Iterable<R>
 
 	/** Execute query and return a generator that yields result rows */
-	gen<R = RET>(params?: P): Generator<R>
+	rows<R = RET>(params?: P): Generator<R>
 
 	/** Execute query and return first result row or undefined */
 	get<R = RET>(params?: P): R | undefined
@@ -531,7 +531,7 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 			}
 		},
 
-		*gen<R = RET>(params: P = {} as P): Generator<R> {
+		*rows<R = RET>(params: P = {} as P): Generator<R> {
 			try {
 				const { stmt, namedParams, hasJsonColumns } = props.build(params)
 				// @ts-expect-error - @types/node is behind

@@ -375,7 +375,7 @@ test("generates rows from query", () => {
     ORDER BY id
   `
 
-	const generator = query.gen<{
+	const generator = query.rows<{
 		name: string
 		data: Record<string, unknown>
 	}>()
@@ -394,7 +394,7 @@ test("generator handles empty results", () => {
 	db.exec("CREATE TABLE empty_table (id INTEGER PRIMARY KEY)")
 
 	const query = db.sql<Record<string, never>>`SELECT * FROM empty_table`
-	const generator = query.gen()
+	const generator = query.rows()
 
 	let count = 0
 	for (const _ of generator) {
@@ -421,7 +421,7 @@ test("generator supports early termination", () => {
     SELECT * FROM sequence ORDER BY value
   `
 
-	const generator = query.gen<{ id: number; value: number }>({})
+	const generator = query.rows<{ id: number; value: number }>({})
 	let count = 0
 
 	// Only consume first 50 items
@@ -502,7 +502,7 @@ test("generator handles complex joins with JSON data", () => {
     ORDER BY p.id
   `
 
-	const generator = query.gen<{
+	const generator = query.rows<{
 		name: string
 		user_settings: Record<string, unknown>
 		content: string
@@ -582,7 +582,7 @@ test("generator handles dynamic query composition", () => {
 	// Compose with ORDER BY
 	baseQuery = baseQuery.sql`ORDER BY price DESC`
 
-	const generator = baseQuery.gen<{
+	const generator = baseQuery.rows<{
 		id: number
 		name: string
 		price: number
@@ -619,7 +619,7 @@ test("generator handles error recovery and cleanup", () => {
     SELECT * FROM error_test ORDER BY id
   `
 
-	const generator = query.gen<{ id: number; value: number }>({})
+	const generator = query.rows<{ id: number; value: number }>({})
 
 	let count = 0
 	try {
@@ -635,7 +635,7 @@ test("generator handles error recovery and cleanup", () => {
 	}
 
 	// Start a new query
-	const newGenerator = query.gen<{ id: number; value: number }>({})
+	const newGenerator = query.rows<{ id: number; value: number }>({})
 	count = 0
 	for (const row of newGenerator) {
 		assert.equal(row.value, count)

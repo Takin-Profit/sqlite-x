@@ -434,3 +434,189 @@ describe("Values Context SQL Generation", () => {
 		)
 	})
 })
+
+describe("forEach Values Generation", () => {
+	let db: DB
+
+	beforeEach(() => {
+		db = new DB({
+			location: ":memory:",
+			environment: "testing",
+		})
+		db.exec(`
+      CREATE TABLE bands (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        formed_year INTEGER,
+        members INTEGER,
+        metadata TEXT
+      );
+    `)
+	})
+
+	afterEach(() => {
+		db.close()
+	})
+
+	test("generates correct SQL for basic array of values", () => {
+		type Band = {
+			name: string
+			formed_year: number
+			members: number
+		}
+
+		const stmt = db.sql<Band>`
+      INSERT INTO bands ${{ values: ["*", { forEach: true }] }}
+    `
+
+		const bands = [
+			{ name: "INDIAN OCEAN", formed_year: 1990, members: 5 },
+			{ name: "BTS", formed_year: 2013, members: 7 },
+			{ name: "METALLICA", formed_year: 1981, members: 4 },
+		]
+
+		assert.equal(
+			stmt.sourceSQL(bands).trim(),
+			"INSERT INTO bands (name, formed_year, members)\nVALUES ($name, $formed_year, $members),\n  ($name, $formed_year, $members),\n  ($name, $formed_year, $members)"
+		)
+	})
+
+	test("handles empty array", () => {
+		type Band = {
+			name: string
+			formed_year: number
+		}
+
+		const stmt = db.sql<Band>`
+      INSERT INTO bands ${{ values: ["*", { forEach: true }] }}
+    `
+
+		assert.throws(
+			() => stmt.sourceSQL([]),
+			(err: unknown) => {
+				assert(err instanceof NodeSqliteError)
+				assert(err.message.includes("Cannot insert empty array"))
+				return true
+			}
+		)
+	})
+
+	test("handles Set input", () => {
+		type Band = {
+			name: string
+			members: number
+		}
+
+		const stmt = db.sql<Band>`
+      INSERT INTO bands ${{ values: ["*", { forEach: true }] }}
+    `
+
+		const bandsSet = new Set([
+			{ name: "PINK FLOYD", members: 5 },
+			{ name: "LED ZEPPELIN", members: 4 },
+		])
+
+		assert.equal(
+			stmt.sourceSQL(bandsSet).trim(),
+			"INSERT INTO bands (name, members)\nVALUES ($name, $members),\n  ($name, $members)"
+		)
+	})
+
+	test("combines forEach with JSON columns", () => {
+		type Band = {
+			name: string
+			members: number
+			metadata: {
+				genre: string[]
+				albums: number
+				active: boolean
+			}
+		}
+
+		const stmt = db.sql<Band>`
+      INSERT INTO bands ${{ values: ["*", { forEach: true, jsonColumns: ["metadata"] }] }}
+    `
+
+		const bands = [
+			{
+				name: "QUEEN",
+				members: 4,
+				metadata: { genre: ["rock"], albums: 15, active: true },
+			},
+			{
+				name: "THE BEATLES",
+				members: 4,
+				metadata: { genre: ["rock", "pop"], albums: 12, active: false },
+			},
+		]
+
+		assert.equal(
+			stmt.sourceSQL(bands).trim(),
+			"INSERT INTO bands (name, members, metadata)\nVALUES ($name, $members, jsonb($metadata)),\n  ($name, $members, jsonb($metadata))"
+		)
+	})
+
+	test("throws on non-array/non-set input", () => {
+		type Band = { name: string }
+		const stmt = db.sql<Band>`
+      INSERT INTO bands ${{ values: ["*", { forEach: true }] }}
+    `
+
+		assert.throws(
+			() => stmt.sourceSQL({ name: "INVALID" }),
+			(err: unknown) => {
+				assert(err instanceof NodeSqliteError)
+				assert(err.message.includes("Expected array or Set"))
+				return true
+			}
+		)
+	})
+
+	test("handles array with single item", () => {
+		type Band = {
+			name: string
+			members: number
+		}
+
+		const stmt = db.sql<Band>`
+      INSERT INTO bands ${{ values: ["*", { forEach: true }] }}
+    `
+
+		const bands = [{ name: "SOLO ARTIST", members: 1 }]
+
+		assert.equal(
+			stmt.sourceSQL(bands).trim(),
+			"INSERT INTO bands (name, members)\nVALUES ($name, $members)"
+		)
+	})
+
+	test("ensures consistent column order across all rows", () => {
+		type Band = {
+			name: string
+			formed_year?: number
+			members: number
+		}
+
+		const stmt = db.sql<Band>`
+      INSERT INTO bands ${{ values: ["*", { forEach: true }] }}
+    `
+
+		const bands = [
+			{ name: "BAND1", members: 4, formed_year: 1990 },
+			{ name: "BAND2", members: 3 },
+			{ name: "BAND3", members: 5, formed_year: 1985 },
+		]
+
+		const sql = stmt.sourceSQL(bands)
+		const lines = sql.trim().split("\n")
+
+		// Verify column order is consistent
+		const columnsLine = lines[0]
+		assert(columnsLine.includes("name") && columnsLine.includes("members"))
+
+		// Verify all VALUES lines have same number of parameters
+		const valueSets = lines.slice(2)
+		const paramCounts = valueSets.map(line => (line.match(/\$/g) || []).length)
+		assert(paramCounts.every(count => count === paramCounts[0]))
+	})
+})

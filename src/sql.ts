@@ -222,7 +222,9 @@ export class Sql<P extends DataRow> {
 				}
 			}
 		}
-		return this.#fmt(result.trim())
+		const ret = this.#fmt(result.trim())
+		console.log(`SQL: ${ret}`)
+		return ret
 	}
 
 	get hasJsonColumns(): boolean {

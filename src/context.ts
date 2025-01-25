@@ -9,58 +9,28 @@ import type { DataRow } from "#types"
 import { validationErr, type ValidationError } from "#validate"
 import { validateWhereClause, type WhereClause } from "#where"
 
-/**
- * Represents parameter values that can be used in SQL statements, either as direct parameters
- * or with JSON conversion
- */
 export type ValueType<P extends DataRow> = ParameterOperator<P> | ToJson<P>
 
-/**
- * Configuration for handling all columns with specific JSON column designations
- */
-export type ValuesWithJsonColumns<P extends DataRow> = [
-	"*",
-	{ jsonColumns: (keyof P)[]; forEach?: true },
-]
-
-/**
- * Options for INSERT or SET operations, supporting individual columns,
- * all columns (*), or JSON column specifications
- */
-export type InsertOrSetOptions<P extends DataRow> =
+export type SetOptions<P extends DataRow> =
 	| ValueType<P>[]
 	| "*"
-	| ValuesWithJsonColumns<P>
+	| ["*", { jsonColumns: (keyof P)[] }]
 
-/**
- * Core SQL context for building type-safe queries
- */
+export type InsertOptions<P extends DataRow> =
+	| ValueType<P>[]
+	| "*"
+	| ["*", { jsonColumns?: (keyof P)[]; forEach?: boolean }]
+
+// Core SQL context type
 export type SqlContext<P extends DataRow> = Partial<{
-	/** Column selection with optional JSON transformations */
 	cols: (keyof P | FromJson<P> | ToJson<P>)[] | "*"
-
-	/** INSERT values specification */
-	values: InsertOrSetOptions<P>
-
-	/** UPDATE SET clause specification */
-	set: InsertOrSetOptions<P>
-
-	/** WHERE clause conditions */
+	values: InsertOptions<P>
+	set: SetOptions<P>
 	where: WhereClause<P>
-
-	/** ORDER BY clause with direction */
 	orderBy: Partial<Record<keyof P, "ASC" | "DESC">>
-
-	/** LIMIT clause value */
 	limit: number
-
-	/** OFFSET clause value */
 	offset: number
-
-	/** RETURNING clause columns */
 	returning: (keyof P)[] | "*"
-
-	/** Table column definitions */
 	columns: Columns<P>
 }>
 
@@ -248,21 +218,54 @@ function validateInsertOrSetOptions<P extends DataRow>(
 		return [validationErr({ msg: "Must be '*' or an array" })]
 	}
 
-	// Check if it's a ValuesWithJsonColumns tuple
+	// Check if it's a tuple with configuration
 	if (value.length === 2 && value[0] === "*") {
-		const [, jsonConfig] = value
-		if (!isJsonColumnsObject(jsonConfig)) {
+		const [, config] = value
+		if (typeof config !== "object" || config === null) {
 			return [
 				validationErr({
-					msg: "Invalid JSON columns configuration",
+					msg: "Second element must be a configuration object",
 					path: "[1]",
 				}),
 			]
 		}
+
+		// Check for at least one valid config option
+		if (!("jsonColumns" in config) && !("forEach" in config)) {
+			return [
+				validationErr({
+					msg: "Configuration must include either jsonColumns or forEach",
+					path: "[1]",
+				}),
+			]
+		}
+
+		if (
+			"jsonColumns" in config &&
+			(!Array.isArray(config.jsonColumns) ||
+				!config.jsonColumns.every((col: unknown) => typeof col === "string"))
+		) {
+			return [
+				validationErr({
+					msg: "jsonColumns must be an array of strings",
+					path: "[1].jsonColumns",
+				}),
+			]
+		}
+
+		if ("forEach" in config && typeof config.forEach !== "boolean") {
+			return [
+				validationErr({
+					msg: "forEach must be a boolean value",
+					path: "[1].forEach",
+				}),
+			]
+		}
+
 		return []
 	}
 
-	// Validate ValueType array format
+	// Validate parameter operators array
 	const errors: ValidationError[] = []
 	value.forEach((item, index) => {
 		if (typeof item !== "string") {
@@ -313,21 +316,6 @@ function isValidValueType(value: string): boolean {
 	return (
 		value.startsWith("$") &&
 		(value.includes(".toJson") ? value.endsWith(".toJson") : true)
-	)
-}
-
-function isJsonColumnsObject(
-	value: unknown
-): value is { jsonColumns: string[] } {
-	return (
-		typeof value === "object" &&
-		value !== null &&
-		(Object.hasOwn(value, "jsonColumns") || Object.hasOwn(value, "forEach")) &&
-		((Array.isArray((value as { jsonColumns: unknown })?.jsonColumns) &&
-			(value as { jsonColumns: unknown[] }).jsonColumns.every(
-				col => typeof col === "string"
-			)) ||
-			(value as { forEach: boolean })?.forEach === true)
 	)
 }
 

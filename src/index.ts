@@ -50,12 +50,7 @@ export type {
 	LockingModes,
 } from "#pragmas"
 
-export type {
-	SqlContext,
-	InsertOrSetOptions,
-	ValuesWithJsonColumns,
-	ValueType,
-} from "#context"
+export type { SqlContext } from "#context"
 
 export type {
 	Columns,

@@ -20,7 +20,7 @@ export type ValueType<P extends DataRow> = ParameterOperator<P> | ToJson<P>
  */
 export type ValuesWithJsonColumns<P extends DataRow> = [
 	"*",
-	{ jsonColumns: (keyof P)[] },
+	{ jsonColumns: (keyof P)[]; forEach?: true },
 ]
 
 /**
@@ -322,11 +322,12 @@ function isJsonColumnsObject(
 	return (
 		typeof value === "object" &&
 		value !== null &&
-		"jsonColumns" in value &&
-		Array.isArray((value as { jsonColumns: unknown }).jsonColumns) &&
-		(value as { jsonColumns: unknown[] }).jsonColumns.every(
-			col => typeof col === "string"
-		)
+		(Object.hasOwn(value, "jsonColumns") || Object.hasOwn(value, "forEach")) &&
+		((Array.isArray((value as { jsonColumns: unknown })?.jsonColumns) &&
+			(value as { jsonColumns: unknown[] }).jsonColumns.every(
+				col => typeof col === "string"
+			)) ||
+			(value as { forEach: boolean })?.forEach === true)
 	)
 }
 

@@ -348,6 +348,9 @@ export interface XStatementSync<P extends DataRow, RET = unknown> {
 	/** Execute query and return an iterator over result rows */
 	iter<R = RET>(params?: P): Iterator<R> & Iterable<R>
 
+	/** Execute query and return a generator that yields result rows */
+	gen<R = RET>(params?: P): Generator<R>
+
 	/** Execute query and return first result row or undefined */
 	get<R = RET>(params?: P): R | undefined
 
@@ -516,6 +519,31 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 					[Symbol.iterator]() {
 						return this
 					},
+				}
+			} catch (error) {
+				throw new NodeSqliteError(
+					"ERR_SQLITE_QUERY",
+					SqlitePrimaryResultCode.SQLITE_ERROR,
+					"Query execution failed",
+					error instanceof Error ? error.message : String(error),
+					error instanceof Error ? error : undefined
+				)
+			}
+		},
+
+		*gen<R = RET>(params: P = {} as P): Generator<R> {
+			try {
+				const { stmt, namedParams, hasJsonColumns } = props.build(params)
+				// @ts-expect-error - @types/node is behind
+				const iterator = stmt.iterate(namedParams)
+
+				let result = iterator.next()
+				while (!result.done) {
+					const value = hasJsonColumns
+						? (parseJsonColumns(result.value as DataRow) as R)
+						: (result.value as R)
+					yield value
+					result = iterator.next()
 				}
 			} catch (error) {
 				throw new NodeSqliteError(

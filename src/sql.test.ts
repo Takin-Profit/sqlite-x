@@ -344,3 +344,302 @@ describe("Statement Iterator", () => {
 		assert.deepEqual(names, ["Alice", "Bob", "Carol"])
 	})
 })
+
+test("generates rows from query", () => {
+	db.exec(`
+    CREATE TABLE test_generator (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      data JSON
+    )
+  `)
+
+	const insertData = db.sql<{ name: string; data: Record<string, unknown> }>`
+    INSERT INTO test_generator (name, data)
+    VALUES (${"$name"}, ${"$data->json"})
+  `
+
+	const testData = [
+		{ name: "item1", data: { value: 1, active: true } },
+		{ name: "item2", data: { value: 2, active: false } },
+		{ name: "item3", data: { value: 3, active: true } },
+	]
+
+	for (const item of testData) {
+		insertData.run(item)
+	}
+
+	const query = db.sql<Record<string, never>>`
+    SELECT name, json_extract(data, '$') as data
+    FROM test_generator
+    ORDER BY id
+  `
+
+	const generator = query.gen<{
+		name: string
+		data: Record<string, unknown>
+	}>()
+
+	let index = 0
+	for (const row of generator) {
+		assert.equal(row.name, testData[index].name)
+		assert.deepEqual(row.data, testData[index].data)
+		index++
+	}
+
+	assert.equal(index, testData.length)
+})
+
+test("generator handles empty results", () => {
+	db.exec("CREATE TABLE empty_table (id INTEGER PRIMARY KEY)")
+
+	const query = db.sql<Record<string, never>>`SELECT * FROM empty_table`
+	const generator = query.gen()
+
+	let count = 0
+	for (const _ of generator) {
+		count++
+	}
+
+	assert.equal(count, 0)
+})
+
+test("generator supports early termination", () => {
+	db.exec(`
+    CREATE TABLE sequence (
+      id INTEGER PRIMARY KEY,
+      value INTEGER
+    )
+  `)
+
+	// Insert test data
+	for (let i = 0; i < 100; i++) {
+		db.exec(`INSERT INTO sequence (value) VALUES (${i})`)
+	}
+
+	const query = db.sql<Record<string, never>>`
+    SELECT * FROM sequence ORDER BY value
+  `
+
+	const generator = query.gen<{ id: number; value: number }>({})
+	let count = 0
+
+	// Only consume first 50 items
+	for (const row of generator) {
+		assert.equal(row.value, count)
+		count++
+		if (count === 50) {
+			break
+		}
+	}
+
+	assert.equal(count, 50)
+})
+
+test("generator handles complex joins with JSON data", () => {
+	// Setup tables
+	db.exec(`
+    CREATE TABLE users (
+      id INTEGER PRIMARY KEY,
+      name TEXT,
+      settings JSON
+    );
+
+    CREATE TABLE posts (
+      id INTEGER PRIMARY KEY,
+      user_id INTEGER,
+      content TEXT,
+      metadata JSON,
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    );
+  `)
+
+	// Insert test data
+	const insertUser = db.sql<{
+		name: string
+		settings: Record<string, unknown>
+	}>`
+    INSERT INTO users (name, settings)
+    VALUES (${"$name"}, ${"$settings->json"})
+  `
+
+	const insertPost = db.sql<{
+		userId: number
+		content: string
+		metadata: Record<string, unknown>
+	}>`
+    INSERT INTO posts (user_id, content, metadata)
+    VALUES (${"$userId"}, ${"$content"}, ${"$metadata->json"})
+  `
+
+	const users = [
+		{ name: "Alice", settings: { theme: "dark", notifications: true } },
+		{ name: "Bob", settings: { theme: "light", notifications: false } },
+	]
+
+	for (const user of users) {
+		insertUser.run(user)
+	}
+
+	const posts = [
+		{ userId: 1, content: "Post 1", metadata: { tags: ["a", "b"], views: 10 } },
+		{ userId: 1, content: "Post 2", metadata: { tags: ["b", "c"], views: 20 } },
+		{ userId: 2, content: "Post 3", metadata: { tags: ["a", "c"], views: 30 } },
+	]
+
+	for (const post of posts) {
+		insertPost.run(post)
+	}
+
+	const query = db.sql<Record<string, never>>`
+    SELECT
+      u.name,
+      json_extract(u.settings, '$') as user_settings,
+      p.content,
+      json_extract(p.metadata, '$') as post_metadata
+    FROM users u
+    JOIN posts p ON u.id = p.user_id
+    ORDER BY p.id
+  `
+
+	const generator = query.gen<{
+		name: string
+		user_settings: Record<string, unknown>
+		content: string
+		post_metadata: Record<string, unknown>
+	}>({})
+
+	let count = 0
+	for (const row of generator) {
+		if (count < 2) {
+			assert.equal(row.name, "Alice")
+			assert.deepEqual(row.user_settings, users[0].settings)
+		} else {
+			assert.equal(row.name, "Bob")
+			assert.deepEqual(row.user_settings, users[1].settings)
+		}
+		assert.equal(row.content, posts[count].content)
+		assert.deepEqual(row.post_metadata, posts[count].metadata)
+		count++
+	}
+
+	assert.equal(count, 3)
+})
+
+test("generator handles dynamic query composition", () => {
+	db.exec(`
+    CREATE TABLE products (
+      id INTEGER PRIMARY KEY,
+      name TEXT,
+      price REAL,
+      category TEXT,
+      details JSON
+    )
+  `)
+
+	const insert = db.sql<{
+		name: string
+		price: number
+		category: string
+		details: Record<string, unknown>
+	}>`
+    INSERT INTO products (name, price, category, details)
+    VALUES (${"$name"}, ${"$price"}, ${"$category"}, ${"$details->json"})
+  `
+
+	const products = [
+		{
+			name: "A",
+			price: 10.99,
+			category: "electronics",
+			details: { stock: 5, rating: 4.5 },
+		},
+		{
+			name: "B",
+			price: 20.99,
+			category: "books",
+			details: { stock: 10, rating: 4.0 },
+		},
+		{
+			name: "C",
+			price: 15.99,
+			category: "electronics",
+			details: { stock: 0, rating: 4.2 },
+		},
+	]
+	for (const p of products) {
+		insert.run(p)
+	}
+
+	let baseQuery = db.sql<Record<string, never>>`
+    SELECT *, json_extract(details, '$') as details
+    FROM products
+  `
+
+	// Compose with WHERE
+	baseQuery = baseQuery.sql`WHERE category = 'electronics'`
+
+	// Compose with ORDER BY
+	baseQuery = baseQuery.sql`ORDER BY price DESC`
+
+	const generator = baseQuery.gen<{
+		id: number
+		name: string
+		price: number
+		category: string
+		details: Record<string, unknown>
+	}>({})
+
+	let count = 0
+	let lastPrice = Number.POSITIVE_INFINITY
+
+	for (const row of generator) {
+		assert.equal(row.category, "electronics")
+		assert.ok(row.price <= lastPrice) // Check ordering
+		lastPrice = row.price
+		count++
+	}
+
+	assert.equal(count, 2)
+})
+
+test("generator handles error recovery and cleanup", () => {
+	db.exec(`
+    CREATE TABLE error_test (
+      id INTEGER PRIMARY KEY,
+      value INTEGER
+    )
+  `)
+
+	for (let i = 0; i < 5; i++) {
+		db.exec(`INSERT INTO error_test (value) VALUES (${i})`)
+	}
+
+	const query = db.sql<Record<string, never>>`
+    SELECT * FROM error_test ORDER BY id
+  `
+
+	const generator = query.gen<{ id: number; value: number }>({})
+
+	let count = 0
+	try {
+		for (const row of generator) {
+			assert.equal(row.value, count)
+			count++
+			if (count === 3) {
+				throw new Error("Simulated error")
+			}
+		}
+	} catch (error) {
+		assert.equal((error as Error).message, "Simulated error")
+	}
+
+	// Start a new query
+	const newGenerator = query.gen<{ id: number; value: number }>({})
+	count = 0
+	for (const row of newGenerator) {
+		assert.equal(row.value, count)
+		count++
+	}
+	assert.equal(count, 5)
+})

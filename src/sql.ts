@@ -338,6 +338,16 @@ export class Sql<P extends DataRow> {
 	}
 }
 
+type SingleRow<P extends DataRow> = {
+	[K in keyof P]: P[K]
+}
+
+// Type for values params that can be single row or multiple rows
+type ValuesParam<P extends DataRow> =
+	| SingleRow<P>
+	| SingleRow<P>[]
+	| Set<SingleRow<P>>
+
 /**
  * Interface for prepared SQL statements with type safety and chaining support.
  * @template P Type of parameters object
@@ -345,25 +355,25 @@ export class Sql<P extends DataRow> {
  */
 export interface XStatementSync<P extends DataRow, RET = unknown> {
 	/** Execute query and return all result rows */
-	all<R = RET>(params?: P): R[]
+	all<R = RET>(params?: ValuesParam<P>): R[]
 
 	/** Execute query and return an iterator over result rows */
-	iter<R = RET>(params?: P): Iterator<R> & Iterable<R>
+	iter<R = RET>(params?: ValuesParam<P>): Iterator<R> & Iterable<R>
 
 	/** Execute query and return a generator that yields result rows */
-	rows<R = RET>(params?: P): Generator<R>
+	rows<R = RET>(params?: ValuesParam<P>): Generator<R>
 
 	/** Execute query and return first result row or undefined */
-	get<R = RET>(params?: P): R | undefined
+	get<R = RET>(params?: ValuesParam<P>): R | undefined
 
 	/** Execute query and return statement result info */
-	run(params?: P): StatementResultingChanges
+	run(params?: ValuesParam<P>): StatementResultingChanges
 
 	/** Get SQL with parameters expanded */
-	expandedSQL(params?: P): string
+	expandedSQL(params?: ValuesParam<P>): string
 
 	/** Get original SQL source */
-	sourceSQL: (params?: P) => string
+	sourceSQL: (params?: ValuesParam<P>) => string
 
 	/** Chain another SQL template literal */
 	sql(
@@ -420,9 +430,9 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 	props: CreateXStatementSyncProps<P>
 ): XStatementSync<P, RET> {
 	return {
-		all<R = RET>(params: P = {} as P) {
+		all<R = RET>(params: ValuesParam<P> = {} as P) {
 			try {
-				const { stmt, namedParams, hasJsonColumns } = props.build(params)
+				const { stmt, namedParams, hasJsonColumns } = props.build(params as P)
 				const results = stmt.all(namedParams)
 				if (!results || !results.length) {
 					// No results case
@@ -456,9 +466,9 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 			}
 		},
 
-		get<R = RET>(params: P = {} as P) {
+		get<R = RET>(params: ValuesParam<P> = {} as P) {
 			try {
-				const { stmt, namedParams, hasJsonColumns } = props.build(params)
+				const { stmt, namedParams, hasJsonColumns } = props.build(params as P)
 				const row = stmt.get(namedParams)
 
 				if (!row) {
@@ -481,9 +491,9 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 			}
 		},
 
-		run(params: P = {} as P) {
+		run(params: ValuesParam<P> = {} as P) {
 			try {
-				const { stmt, namedParams } = props.build(params)
+				const { stmt, namedParams } = props.build(params as P)
 				return stmt.run(namedParams)
 			} catch (error) {
 				throw new NodeSqliteError(
@@ -496,9 +506,9 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 			}
 		},
 
-		iter<R = RET>(params: P = {} as P): Iterable<R> & Iterator<R> {
+		iter<R = RET>(params: ValuesParam<P> = {} as P): Iterable<R> & Iterator<R> {
 			try {
-				const { stmt, namedParams, hasJsonColumns } = props.build(params)
+				const { stmt, namedParams, hasJsonColumns } = props.build(params as P)
 				// @ts-expect-error - @types/node is behind
 				const baseIterator = stmt.iterate(namedParams)
 
@@ -533,9 +543,9 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 			}
 		},
 
-		*rows<R = RET>(params: P = {} as P): Generator<R> {
+		*rows<R = RET>(params: ValuesParam<P> = {} as P): Generator<R> {
 			try {
-				const { stmt, namedParams, hasJsonColumns } = props.build(params)
+				const { stmt, namedParams, hasJsonColumns } = props.build(params as P)
 				// @ts-expect-error - @types/node is behind
 				const iterator = stmt.iterate(namedParams)
 
@@ -558,9 +568,9 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 			}
 		},
 
-		sourceSQL(params: P = {} as P) {
+		sourceSQL(params: ValuesParam<P> = {} as P) {
 			try {
-				const { stmt } = props.build(params)
+				const { stmt } = props.build(params as P)
 				return stmt.sourceSQL
 			} catch (error) {
 				throw new NodeSqliteError(
@@ -573,9 +583,9 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 			}
 		},
 
-		expandedSQL(params: P = {} as P) {
+		expandedSQL(params: ValuesParam<P> = {} as P) {
 			try {
-				const { stmt } = props.build(params)
+				const { stmt } = props.build(params as P)
 				return stmt.expandedSQL
 			} catch (error) {
 				throw new NodeSqliteError(

@@ -16,8 +16,6 @@ import {
 } from "#context"
 import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors"
 import { buildSetStatement, buildValuesStatement } from "#values"
-import type stringifyLib from "fast-safe-stringify"
-import { createRequire } from "node:module"
 import type { Primitive } from "type-fest"
 import type {
 	StatementResultingChanges,
@@ -30,10 +28,7 @@ import sqlFormatter from "@sqltools/formatter"
 import { buildOrderByStatement } from "#order-by"
 import { buildColumnsStatement } from "#columns"
 import type { Config } from "@sqltools/formatter/lib/core/types"
-
-const stringify: typeof stringifyLib = createRequire(import.meta.url)(
-	"fast-safe-stringify"
-)
+import stringify from "#stringify"
 
 /**
  * Represents a parameter operator that references a property of type P

@@ -43,7 +43,7 @@ export class DB {
 	readonly #statementCache?: StatementCache
 	readonly #location: string
 	readonly #logger: Logger
-	readonly #formatConfig?: FormatterConfig
+	readonly #formatConfig?: FormatterConfig | false
 	/**
 	 * Creates a new database connection with optional configuration.
 	 * @param options Database configuration options

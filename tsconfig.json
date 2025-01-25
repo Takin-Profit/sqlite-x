@@ -61,7 +61,8 @@
     "./src/**/*.mjs",
     "./src/**/*.json",
     "./src/**/*.d.ts",
-    "./src/**/*.test.ts"
+    "./src/**/*.test.ts",
+    "claude-bundle.mjs"
   ],
   "exclude": [
     "node_modules",

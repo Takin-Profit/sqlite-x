@@ -1,7 +1,8 @@
 import { test, beforeEach, afterEach } from "node:test"
 import assert from "node:assert/strict"
 import { DB } from "#database"
-import { isNodeSqliteError } from "#errors"
+import { isNodeSqliteError, NodeSqliteError } from "#errors"
+import { raw } from "#sql.js"
 
 let db: DB
 
@@ -182,4 +183,53 @@ test("builds complex INSERT with subselect and CTE", () => {
 			.trim(),
 		"WITH active_users AS (\n  SELECT id,\n    json_extract(metadata, '$')\n  FROM users\n  WHERE active = $active\n)\nINSERT INTO posts (user_id, metadata)\nSELECT id,\n  jsonb($newMeta)\nFROM active_users\nRETURNING *"
 	)
+})
+
+test("handles raw SQL literals", () => {
+	const tableName = "users"
+	let query = db.sql`SELECT * FROM ${raw`${tableName}`}`
+	query = query.sql`WHERE age > ${"$age"}`
+
+	assert.equal(
+		query.sourceSQL({ age: 21 }).trim(),
+		"SELECT *\nFROM users\nWHERE age > $age"
+	)
+})
+
+test("handles raw SQL literals in complex queries", () => {
+	const tableName = "users"
+	const joinTable = "posts"
+	let query = db.sql`WITH ${raw`${tableName}_filtered`} AS (`
+	query = query.sql`SELECT * FROM ${raw`${tableName}`}`
+	query = query.sql`WHERE active = ${"$active"})`
+	query = query.sql`SELECT t.*, p.title FROM ${raw`${tableName}_filtered t`}`
+	query = query.sql`JOIN ${raw`${joinTable} p`} ON p.user_id = t.id`
+	query = query.sql`WHERE p.title LIKE ${"$title"}`
+
+	assert.equal(
+		query.sourceSQL({ active: true, title: "%test%" }).trim(),
+		"WITH users_filtered AS (\n  SELECT *\n  FROM users\n  WHERE active = $active\n)\nSELECT t.*,\n  p.title\nFROM users_filtered t\n  JOIN posts p ON p.user_id = t.id\nWHERE p.title LIKE $title"
+	)
+})
+
+test("handles multiple raw literals in a single template", () => {
+	const table1 = "users u"
+	const table2 = "posts p"
+	const query = db.sql`SELECT * FROM ${raw`${table1}`} JOIN ${raw`${table2}`} ON p.user_id = u.id`
+
+	assert.equal(
+		query.sourceSQL({}).trim(),
+		"SELECT *\nFROM users u\n  JOIN posts p ON p.user_id = u.id"
+	)
+})
+
+test("raw SQL literals throw on invalid inputs", () => {
+	const obj = { foo: "bar" }
+	const query = db.sql`SELECT * FROM users`
+	assert.throws(() => {
+		query.sql`WHERE name = ${raw`${
+			// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+			obj as any
+		}`}`
+	}, NodeSqliteError)
 })

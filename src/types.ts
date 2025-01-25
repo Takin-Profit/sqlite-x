@@ -96,3 +96,15 @@ export type LogicalOperator = (typeof LOGICAL_OPERATORS)[number]
  */
 // biome-ignore lint/suspicious/noExplicitAny: <explanation>
 export type DataRow = { [key: string]: any }
+
+export type RawValue = { type: "__x_literal__"; value: string }
+
+// Update isLiteral type guard
+export function isRawValue(value: unknown): value is RawValue {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		Object.hasOwn(value, "type") &&
+		(value as RawValue).type === "__x_literal__"
+	)
+}

@@ -22,7 +22,7 @@ import type {
 	StatementSync,
 	SupportedValueType,
 } from "node:sqlite"
-import type { DataRow } from "#types"
+import { isRawValue, type DataRow, type RawValue } from "#types"
 import { buildWhereStatement } from "#where.js"
 import sqlFormatter from "@sqltools/formatter"
 import { buildOrderByStatement } from "#order-by"
@@ -77,7 +77,7 @@ function toSupportedValue(value: unknown): SupportedValueType {
  * Parameter values and contexts that can be used in SQL template literals
  */
 export type SqlTemplateValues<P extends DataRow> = ReadonlyArray<
-	ParamValue<P> | SqlContext<P>
+	ParamValue<P> | SqlContext<P> | RawValue
 >
 
 /**
@@ -104,6 +104,29 @@ export type SqlOptions<P extends DataRow> = {
 	paramOperators: SqlTemplateValues<P>
 	formatterConfig?: FormatterConfig
 	generatedSql?: string
+}
+
+export const raw = (
+	strings: TemplateStringsArray,
+	...values: (string | number | boolean | bigint | null)[]
+) => {
+	// Add validation
+	for (const value of values) {
+		if (typeof value === "object" && value !== null) {
+			throw new NodeSqliteError(
+				"ERR_SQLITE_PARAM",
+				SqlitePrimaryResultCode.SQLITE_ERROR,
+				"Invalid parameter",
+				"Raw SQL values must be primitives (string | number | boolean | bigint | null)",
+				undefined
+			)
+		}
+	}
+
+	return {
+		type: "__x_literal__" as const,
+		value: String.raw(strings, ...values),
+	} as RawValue
 }
 
 export class Sql<P extends DataRow> {
@@ -194,17 +217,17 @@ export class Sql<P extends DataRow> {
 
 	// SQL property update
 	get sql(): string {
-		// Start with any previously generated SQL
 		let result = this.#generatedSql
-
-		// Add the first string segment of the current template
 		result += this.strings[0]
+
 		for (let i = 0; i < this.paramOperators.length; i++) {
 			const op = this.paramOperators[i]
 
 			if (isSqlContext<P>(op)) {
 				const contextSql = this.#contextToSql(op)
 				result += contextSql + this.strings[i + 1]
+			} else if (isRawValue(op)) {
+				result += `${op.value}${this.strings[i + 1]}`
 			} else if (typeof op === "string") {
 				if (op.endsWith("->json")) {
 					const columnName = op.split("->")[0]
@@ -217,9 +240,8 @@ export class Sql<P extends DataRow> {
 				}
 			}
 		}
-		const ret = this.#fmt(result.trim())
-		console.log(`SQL: ${ret}`)
-		return ret
+
+		return this.#fmt(result.trim())
 	}
 
 	get hasJsonColumns(): boolean {
@@ -296,7 +318,8 @@ export class Sql<P extends DataRow> {
 		this.#params = params
 
 		const contexts = this.paramOperators.filter(
-			(op): op is SqlContext<P> => typeof op === "object" && !Array.isArray(op)
+			(op): op is SqlContext<P> =>
+				typeof op === "object" && !Array.isArray(op) && !isRawValue(op)
 		)
 
 		const validationErrors = contexts.flatMap(context =>

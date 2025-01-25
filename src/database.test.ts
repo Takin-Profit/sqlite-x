@@ -62,8 +62,7 @@ test("executes basic SELECT query", () => {
 			age: number
 			email: string
 		}
-	>`
-            SELECT name, age, email
+	>`SELECT name, age, email
             FROM users
             WHERE age >= ${"$minAge"}
         `

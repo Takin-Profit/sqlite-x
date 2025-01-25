@@ -29,8 +29,14 @@
  */
 export type { WhereClause } from "#where"
 export type { ValidationError } from "#validate"
-export type { CleanupPragmas, DBOptions, SqlFn, DataRow } from "#types"
-export { Sql } from "#sql"
+export type {
+	CleanupPragmas,
+	DBOptions,
+	SqlFn,
+	DataRow,
+	RawValue,
+} from "#types"
+export { Sql, raw } from "#sql"
 export type {
 	XStatementSync,
 	SqlOptions,

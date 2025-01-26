@@ -14,11 +14,11 @@ export type BaseConstraint =
 	| "PRIMARY KEY"
 	| "AUTOINCREMENT"
 	| "UNIQUE"
-	| `CHECK (${string})`
+	| `CHECK(${string})`
+	| `CHECK (${string})` // Support both with and without space
 	| `FOREIGN KEY REFERENCES ${string} (${string})`
 	| `DEFAULT ${string}`
 	| "NOT NULL"
-
 /**
  * SQLite storage classes (data types)
  * @see https://www.sqlite.org/datatype3.html

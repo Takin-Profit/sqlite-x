@@ -1,6 +1,6 @@
 {
   "name": "@takinprofit/sqlite-x",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "A modern node:sqlite wrapper for TypeScript",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -19,9 +19,8 @@
   "scripts": {
     "build": "tsup",
     "test": "tsx --test --experimental-sqlite src/**/*.test.ts",
-    "test:sql": "tsx --test --test-name-pattern \"Sql.formatSql\" --experimental-sqlite src/**/*.test.ts",
     "test:only": "tsx --test --experimental-sqlite --test-only src/**/*.test.ts",
-    "bundle:claude": "tsx claude-bundle.mts bundle ./src prompt.json"
+    "bundle:claude": "node claude-bundle.mjs bundle ./src prompt.json"
   },
   "keywords": [
     "sqlite",

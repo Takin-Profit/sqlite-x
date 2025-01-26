@@ -44,6 +44,8 @@ export type {
 	SqlTemplateValues,
 } from "#sql"
 
+export type { DeferrableStatus, FKAction, ForeignKeyDef } from "#fk"
+
 export { PragmaDefaults } from "#pragmas"
 export type {
 	JournalMode,

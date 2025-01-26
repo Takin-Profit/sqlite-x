@@ -1,6 +1,6 @@
 {
   "name": "@takinprofit/sqlite-x",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "A modern node:sqlite wrapper for TypeScript",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -40,7 +40,8 @@
     "@types/node": "^22.10.10",
     "tsup": "^8.3.5",
     "tsx": "^4.19.2",
-    "type-fest": "^4.33.0"
+    "type-fest": "^4.33.0",
+    "typescript": "^5.7.3"
   },
   "dependencies": {
     "@sqltools/formatter": "^1.2.5"

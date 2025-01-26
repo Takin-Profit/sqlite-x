@@ -32,6 +32,7 @@ export type SqlContext<P extends DataRow> = Partial<{
 	offset: number
 	returning: (keyof P)[] | "*"
 	columns: Columns<P>
+	foreignKeys: Record<string, string> // we need a better type here
 }>
 
 export function validateSqlContext<P extends DataRow>(

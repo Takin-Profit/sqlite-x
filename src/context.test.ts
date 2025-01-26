@@ -10,6 +10,7 @@ import {
 	validateSqlContext,
 	type SqlContext,
 } from "./context.js"
+import { buildColumnsStatement, type Columns } from "#columns.js"
 
 type TestUser = {
 	id: number
@@ -294,5 +295,157 @@ describe("Context Combination Validation", () => {
 			"AND",
 			"name LIKE $age",
 		])
+	})
+})
+
+describe("Foreign Key Column Definitions", () => {
+	test("validates basic foreign key", () => {
+		interface TestTable {
+			id: number
+			userId: number
+		}
+
+		const columns: Columns<TestTable> = {
+			id: "INTEGER PRIMARY KEY",
+			userId: "INTEGER NOT NULL",
+			$$foreignKeys: [
+				{
+					key: "userId",
+					references: {
+						table: "users",
+						columns: ["id"],
+					},
+				},
+			],
+		}
+
+		const sql = buildColumnsStatement(columns)
+		assert.equal(
+			sql,
+			"(\n  id INTEGER PRIMARY KEY,\n  userId INTEGER NOT NULL,\n  FOREIGN KEY(userId) REFERENCES users(id)\n)"
+		)
+	})
+
+	test("validates composite foreign key", () => {
+		interface TestTable {
+			id: number
+			firstName: string
+			lastName: string
+		}
+
+		const columns: Columns<TestTable> = {
+			id: "INTEGER PRIMARY KEY",
+			firstName: "TEXT NOT NULL",
+			lastName: "TEXT NOT NULL",
+			$$foreignKeys: [
+				{
+					key: "firstName,lastName",
+					references: {
+						table: "users",
+						columns: ["first", "last"],
+					},
+				},
+			],
+		}
+
+		const sql = buildColumnsStatement(columns)
+		assert.equal(
+			sql,
+			"(\n  id INTEGER PRIMARY KEY,\n  firstName TEXT NOT NULL,\n  lastName TEXT NOT NULL,\n  FOREIGN KEY(firstName, lastName) REFERENCES users(first, last)\n)"
+		)
+	})
+
+	test("validates foreign key with actions", () => {
+		interface TestTable {
+			id: number
+			departmentId: number
+		}
+
+		const columns: Columns<TestTable> = {
+			id: "INTEGER PRIMARY KEY",
+			departmentId: "INTEGER NOT NULL",
+			$$foreignKeys: [
+				{
+					key: "departmentId",
+					references: {
+						table: "departments",
+						columns: ["id"],
+					},
+					onDelete: "CASCADE",
+					onUpdate: "SET NULL",
+				},
+			],
+		}
+
+		const sql = buildColumnsStatement(columns)
+		assert.equal(
+			sql,
+			"(\n  id INTEGER PRIMARY KEY,\n  departmentId INTEGER NOT NULL,\n  FOREIGN KEY(departmentId) REFERENCES departments(id) ON DELETE CASCADE ON UPDATE SET NULL\n)"
+		)
+	})
+
+	test("validates multiple foreign keys", () => {
+		interface TestTable {
+			id: number
+			userId: number
+			groupId: number
+		}
+
+		const columns: Columns<TestTable> = {
+			id: "INTEGER PRIMARY KEY",
+			userId: "INTEGER NOT NULL",
+			groupId: "INTEGER NOT NULL",
+			$$foreignKeys: [
+				{
+					key: "userId",
+					references: {
+						table: "users",
+						columns: ["id"],
+					},
+				},
+				{
+					key: "groupId",
+					references: {
+						table: "groups",
+						columns: ["id"],
+					},
+					onDelete: "CASCADE",
+				},
+			],
+		}
+
+		const sql = buildColumnsStatement(columns)
+		assert.equal(
+			sql,
+			"(\n  id INTEGER PRIMARY KEY,\n  userId INTEGER NOT NULL,\n  groupId INTEGER NOT NULL,\n  FOREIGN KEY(userId) REFERENCES users(id),\n  FOREIGN KEY(groupId) REFERENCES groups(id) ON DELETE CASCADE\n)"
+		)
+	})
+
+	test("validates deferrable foreign key", () => {
+		interface TestTable {
+			id: number
+			parentId: number
+		}
+
+		const columns: Columns<TestTable> = {
+			id: "INTEGER PRIMARY KEY",
+			parentId: "INTEGER",
+			$$foreignKeys: [
+				{
+					key: "parentId",
+					references: {
+						table: "test_table",
+						columns: ["id"],
+					},
+					deferrable: "DEFERRABLE INITIALLY DEFERRED",
+				},
+			],
+		}
+
+		const sql = buildColumnsStatement(columns)
+		assert.equal(
+			sql,
+			"(\n  id INTEGER PRIMARY KEY,\n  parentId INTEGER,\n  FOREIGN KEY(parentId) REFERENCES test_table(id) DEFERRABLE INITIALLY DEFERRED\n)"
+		)
 	})
 })

@@ -1,4 +1,9 @@
 import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors.js"
+import {
+	buildForeignKeyStatement,
+	validateForeignKeys,
+	type ForeignKeyDef,
+} from "#fk.js"
 import type { DataRow } from "#types"
 import { validationErr, type ValidationError } from "#validate"
 
@@ -65,7 +70,7 @@ export type ValidColumnTypeMap<T> = T extends string
  */
 export type Columns<T extends DataRow> = {
 	[K in keyof T]?: ValidColumnTypeMap<T[K]>
-}
+} & { $$foreignKeys?: ForeignKeyDef<T>[] }
 
 const columnRegex = /^(TEXT|INTEGER|REAL|BLOB)(\s+.+)?$/
 
@@ -77,9 +82,13 @@ export function validateColumns<T extends DataRow>(
 	}
 
 	const errors: ValidationError[] = []
-	const columns = value as Record<string, string>
+	const columns = value as Record<string, unknown>
 
 	for (const [key, def] of Object.entries(columns)) {
+		if (key === "$$foreignKeys") {
+			continue
+		}
+
 		if (typeof def !== "string") {
 			errors.push(
 				validationErr({
@@ -97,6 +106,29 @@ export function validateColumns<T extends DataRow>(
 					path: key,
 				})
 			)
+		}
+	}
+
+	if ("$$foreignKeys" in columns) {
+		// Validate the foreign keys array
+		const fks = columns.$$foreignKeys
+		if (!Array.isArray(fks)) {
+			errors.push(
+				validationErr({
+					msg: "Foreign keys must be an array",
+					path: "$$foreignKeys",
+				})
+			)
+		} else {
+			fks.forEach((fk, idx) => {
+				const fkErrors = validateForeignKeys(fk)
+				errors.push(
+					...fkErrors.map(err => ({
+						...err,
+						path: `$$foreignKeys[${idx}].${err.path || ""}`,
+					}))
+				)
+			})
 		}
 	}
 
@@ -123,7 +155,15 @@ export function buildColumnsStatement<T extends DataRow>(
 		)
 	}
 
-	return `(\n  ${Object.entries(columns)
+	const columnDefs = Object.entries(columns)
+		.filter(([key]) => key !== "$$foreignKeys")
 		.map(([name, def]) => `${name} ${String(def).trim()}`)
-		.join(",\n  ")}\n)`
+
+	const foreignKeys = columns.$$foreignKeys
+		? buildForeignKeyStatement(columns.$$foreignKeys)
+		: null
+
+	const allDefs = foreignKeys ? [...columnDefs, foreignKeys] : columnDefs
+
+	return `(\n  ${allDefs.join(",\n  ")}\n)`
 }

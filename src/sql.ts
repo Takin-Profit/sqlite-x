@@ -442,6 +442,29 @@ type CreateXStatementSyncProps<P extends DataRow> = {
 	sql: Sql<P>
 }
 
+const createErrorMessage = <P extends DataRow>(
+	error: unknown,
+	params?: P | P[]
+) => {
+	let paramStr = ""
+
+	if (Array.isArray(params) && params.length > 1) {
+		const item1 = params[0]
+		const item2 = params[1]
+
+		paramStr = `{${Object.keys(item1).join(", ")}, ...} + ${Object.keys(
+			item2
+		).join(", ")}`
+	} else if (typeof params === "object") {
+		paramStr = stringify(params)
+	} else {
+		paramStr = String(params)
+	}
+	return error instanceof Error
+		? `${error.message}: params: ${paramStr}`
+		: `${String(error)}: params: ${paramStr}`
+}
+
 /**
  * Creates a type-safe prepared statement
  */
@@ -480,8 +503,7 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 					"ERR_SQLITE_QUERY",
 					SqlitePrimaryResultCode.SQLITE_ERROR,
 					"Query execution failed",
-					error instanceof Error ? error.message : String(error),
-					error instanceof Error ? error : undefined
+					createErrorMessage(error, params)
 				)
 			}
 		},
@@ -505,8 +527,7 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 					"ERR_SQLITE_QUERY",
 					SqlitePrimaryResultCode.SQLITE_ERROR,
 					"Query execution failed",
-					error instanceof Error ? error.message : String(error),
-					error instanceof Error ? error : undefined
+					createErrorMessage(error, params)
 				)
 			}
 		},
@@ -520,10 +541,7 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 					"ERR_SQLITE_MUTATE",
 					SqlitePrimaryResultCode.SQLITE_ERROR,
 					"Mutation failed",
-					error instanceof Error
-						? `${error.message}: params: ${stringify(params)}`
-						: `${String(error)}: params: ${stringify(params)}`,
-					error instanceof Error ? error : undefined
+					createErrorMessage(error, params)
 				)
 			}
 		},
@@ -559,8 +577,7 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 					"ERR_SQLITE_QUERY",
 					SqlitePrimaryResultCode.SQLITE_ERROR,
 					"Query execution failed",
-					error instanceof Error ? error.message : String(error),
-					error instanceof Error ? error : undefined
+					createErrorMessage(error, params)
 				)
 			}
 		},
@@ -584,8 +601,7 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 					"ERR_SQLITE_QUERY",
 					SqlitePrimaryResultCode.SQLITE_ERROR,
 					"Query execution failed",
-					error instanceof Error ? error.message : String(error),
-					error instanceof Error ? error : undefined
+					createErrorMessage(error, params)
 				)
 			}
 		},
@@ -600,8 +616,7 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 					"ERR_SQLITE_QUERY",
 					SqlitePrimaryResultCode.SQLITE_ERROR,
 					"Failed to get expanded SQL",
-					error instanceof Error ? error.message : String(error),
-					error instanceof Error ? error : undefined
+					createErrorMessage(error, params)
 				)
 			}
 		},
@@ -615,8 +630,7 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 					"ERR_SQLITE_QUERY",
 					SqlitePrimaryResultCode.SQLITE_ERROR,
 					"Failed to get expanded SQL",
-					error instanceof Error ? error.message : String(error),
-					error instanceof Error ? error : undefined
+					createErrorMessage(error, params)
 				)
 			}
 		},

@@ -244,9 +244,7 @@ export class Sql<P extends DataRow> {
 			}
 		}
 
-		const code = this.#fmt(result.trim())
-		console.log(`SQL: ${code}`)
-		return code
+		return this.#fmt(result.trim())
 	}
 	get hasJsonColumns(): boolean {
 		const { sql } = this

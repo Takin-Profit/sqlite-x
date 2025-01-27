@@ -435,7 +435,7 @@ describe("Values Context SQL Generation", () => {
 	})
 })
 
-describe("forEach Values Generation", () => {
+describe("batch Values Generation", () => {
 	let db: DB
 
 	beforeEach(() => {
@@ -466,7 +466,7 @@ describe("forEach Values Generation", () => {
 		}
 
 		const stmt = db.sql<Band>`
-      INSERT INTO bands ${{ values: ["*", { forEach: true }] }}
+      INSERT INTO bands ${{ values: ["*", { batch: true }] }}
     `
 
 		const bands = [
@@ -488,7 +488,7 @@ describe("forEach Values Generation", () => {
 		}
 
 		const stmt = db.sql<Band>`
-      INSERT INTO bands ${{ values: ["*", { forEach: true }] }}
+      INSERT INTO bands ${{ values: ["*", { batch: true }] }}
     `
 
 		assert.throws(
@@ -508,7 +508,7 @@ describe("forEach Values Generation", () => {
 		}
 
 		const stmt = db.sql<Band>`
-      INSERT INTO bands ${{ values: ["*", { forEach: true }] }}
+      INSERT INTO bands ${{ values: ["*", { batch: true }] }}
     `
 
 		const bandsSet = new Set([
@@ -522,7 +522,7 @@ describe("forEach Values Generation", () => {
 		)
 	})
 
-	test("combines forEach with JSON columns", () => {
+	test("combines batch with JSON columns", () => {
 		type Band = {
 			name: string
 			members: number
@@ -534,7 +534,7 @@ describe("forEach Values Generation", () => {
 		}
 
 		const stmt = db.sql<Band>`
-      INSERT INTO bands ${{ values: ["*", { forEach: true, jsonColumns: ["metadata"] }] }}
+      INSERT INTO bands ${{ values: ["*", { batch: true, jsonColumns: ["metadata"] }] }}
     `
 
 		const bands = [
@@ -559,7 +559,7 @@ describe("forEach Values Generation", () => {
 	test("throws on non-array/non-set input", () => {
 		type Band = { name: string }
 		const stmt = db.sql<Band>`
-      INSERT INTO bands ${{ values: ["*", { forEach: true }] }}
+      INSERT INTO bands ${{ values: ["*", { batch: true }] }}
     `
 
 		assert.throws(
@@ -579,7 +579,7 @@ describe("forEach Values Generation", () => {
 		}
 
 		const stmt = db.sql<Band>`
-      INSERT INTO bands ${{ values: ["*", { forEach: true }] }}
+      INSERT INTO bands ${{ values: ["*", { batch: true }] }}
     `
 
 		const bands = [{ name: "SOLO ARTIST", members: 1 }]
@@ -598,7 +598,7 @@ describe("forEach Values Generation", () => {
 		}
 
 		const stmt = db.sql<Band>`
-      INSERT INTO bands ${{ values: ["*", { forEach: true }] }}
+      INSERT INTO bands ${{ values: ["*", { batch: true }] }}
     `
 
 		const bands = [

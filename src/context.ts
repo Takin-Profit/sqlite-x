@@ -19,7 +19,7 @@ export type SetOptions<P extends DataRow> =
 export type InsertOptions<P extends DataRow> =
 	| ValueType<P>[]
 	| "*"
-	| ["*", { jsonColumns?: (keyof P)[]; forEach?: boolean }]
+	| ["*", { jsonColumns?: (keyof P)[]; batch?: boolean }]
 
 // Core SQL context type
 export type SqlContext<P extends DataRow> = Partial<{
@@ -231,10 +231,10 @@ function validateInsertOrSetOptions<P extends DataRow>(
 		}
 
 		// Check for at least one valid config option
-		if (!("jsonColumns" in config) && !("forEach" in config)) {
+		if (!("jsonColumns" in config) && !("batch" in config)) {
 			return [
 				validationErr({
-					msg: "Configuration must include either jsonColumns or forEach",
+					msg: "Configuration must include either jsonColumns or batch",
 					path: "[1]",
 				}),
 			]
@@ -253,11 +253,11 @@ function validateInsertOrSetOptions<P extends DataRow>(
 			]
 		}
 
-		if ("forEach" in config && typeof config.forEach !== "boolean") {
+		if ("batch" in config && typeof config.batch !== "boolean") {
 			return [
 				validationErr({
-					msg: "forEach must be a boolean value",
-					path: "[1].forEach",
+					msg: "batch must be a boolean value",
+					path: "[1].batch",
 				}),
 			]
 		}

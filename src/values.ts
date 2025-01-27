@@ -57,14 +57,13 @@ function buildSqlComponents<P extends DataRow>(
 			)
 		}
 
-		// Legacy forEach case
-		if ("forEach" in config) {
+		if ("batch" in config) {
 			if (!Array.isArray(params) && !(params instanceof Set)) {
 				throw new NodeSqliteError(
 					"ERR_SQLITE_PARAM",
 					SqlitePrimaryResultCode.SQLITE_ERROR,
 					"Invalid parameters",
-					"Expected array or Set when using forEach",
+					"Expected array or Set when using batch",
 					undefined
 				)
 			}
@@ -110,7 +109,7 @@ function buildSqlComponents<P extends DataRow>(
 			"ERR_SQLITE_PARAM",
 			SqlitePrimaryResultCode.SQLITE_ERROR,
 			"Invalid configuration",
-			"Configuration must include either forEach or jsonColumns",
+			"Configuration must include either batch or jsonColumns",
 			undefined
 		)
 	}

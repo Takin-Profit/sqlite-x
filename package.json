@@ -1,6 +1,6 @@
 {
   "name": "@takinprofit/sqlite-x",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "A modern node:sqlite wrapper for TypeScript",
   "type": "module",
   "main": "./dist/index.cjs",

@@ -520,7 +520,9 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 					"ERR_SQLITE_MUTATE",
 					SqlitePrimaryResultCode.SQLITE_ERROR,
 					"Mutation failed",
-					error instanceof Error ? error.message : String(error),
+					error instanceof Error
+						? `${error.message}: params: ${stringify(params)}`
+						: `${String(error)}: params: ${stringify(params)}`,
 					error instanceof Error ? error : undefined
 				)
 			}

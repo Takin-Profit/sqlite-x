@@ -282,35 +282,179 @@ describe("Index Creation and Validation", () => {
 			assert.equal(name, "idx_users_id")
 		})
 	})
+})
+interface TestTable {
+	id: number
+	name: string
+	email: string
+	age: number
+	city: string
+	state: string
+	country: string
+	created_at: string
+	metadata: object
+}
 
-	describe("SQL Context Integration", () => {
-		test("creates index via SQL context", () => {
-			const stmt = db.sql<TestTable>`
-    ${
-			// Removed semicolon from here
-			{
-				indexes: [
-					{
-						name: "idx_users_email",
-						tableName: "users",
-						columns: ["email DESC"],
-						options: { unique: true },
-					},
-					{
-						name: "idx_users_name_age",
-						tableName: "users",
-						columns: ["name ASC", "age DESC"],
-						where: "WHERE name IS NOT NULL",
-					},
-				],
-			}
+describe("Database Index Creation (createIndex method)", () => {
+	let db: DB
+
+	beforeEach(() => {
+		db = new DB({ location: ":memory:" })
+		db.exec(`
+            CREATE TABLE test_table (
+                id INTEGER PRIMARY KEY,
+                name TEXT,
+                email TEXT UNIQUE,
+                age INTEGER,
+                city TEXT,
+                state TEXT,
+                country TEXT,
+                created_at TEXT,
+                metadata TEXT
+            )
+        `)
+	})
+
+	afterEach(() => {
+		db.close()
+	})
+
+	// Helper function to check if an index exists
+	function indexExists(db: DB, indexName: string): boolean {
+		const result = db.sql<{ name: string }>`
+            SELECT name FROM sqlite_master WHERE type='index' AND name=${"$name"}
+        `.get({ name: indexName })
+		return !!result
+	}
+
+	test("creates a simple index", () => {
+		const indexDef: IndexDef<TestTable> = {
+			name: "idx_test_table_name",
+			tableName: "test_table",
+			columns: ["name"],
 		}
-  `
 
-			assert.equal(
-				stmt.sourceSQL().trim(),
-				"CREATE UNIQUE INDEX idx_users_email ON users (email DESC);"
-			)
-		})
+		db.createIndex(indexDef)
+		assert.ok(indexExists(db, "idx_test_table_name"))
+	})
+
+	test("creates a unique index", () => {
+		const indexDef: IndexDef<TestTable> = {
+			name: "idx_test_table_email",
+			tableName: "test_table",
+			columns: ["email"],
+			options: { unique: true },
+		}
+
+		db.createIndex(indexDef)
+		assert.ok(indexExists(db, "idx_test_table_email"))
+	})
+
+	test("creates an index with ifNotExists option", () => {
+		const indexDef: IndexDef<TestTable> = {
+			name: "idx_test_table_age",
+			tableName: "test_table",
+			columns: ["age"],
+			options: { ifNotExists: true },
+		}
+
+		db.createIndex(indexDef)
+		assert.ok(indexExists(db, "idx_test_table_age"))
+
+		// Try creating again - should not throw an error
+		db.createIndex(indexDef)
+		assert.ok(indexExists(db, "idx_test_table_age"))
+	})
+
+	test("creates a composite index", () => {
+		const indexDef: IndexDef<TestTable> = {
+			name: "idx_test_table_city_state",
+			tableName: "test_table",
+			columns: ["city", "state"],
+		}
+
+		db.createIndex(indexDef)
+		assert.ok(indexExists(db, "idx_test_table_city_state"))
+	})
+
+	test("creates an index with ordering", () => {
+		const indexDef: IndexDef<TestTable> = {
+			name: "idx_test_table_name_age",
+			tableName: "test_table",
+			columns: ["name ASC", "age DESC"],
+		}
+
+		db.createIndex(indexDef)
+		assert.ok(indexExists(db, "idx_test_table_name_age"))
+	})
+
+	test("creates an index with a WHERE clause", () => {
+		const indexDef: IndexDef<TestTable> = {
+			name: "idx_test_table_age",
+			tableName: "test_table",
+			columns: ["age"],
+			where: "WHERE age > 18",
+		}
+
+		db.createIndex(indexDef)
+		assert.ok(indexExists(db, "idx_test_table_age"))
+	})
+
+	test("creates an index with COLLATE option", () => {
+		const indexDef: IndexDef<TestTable> = {
+			name: "idx_test_table_name_collate",
+			tableName: "test_table",
+			columns: ["name COLLATE NOCASE"],
+		}
+
+		db.createIndex(indexDef)
+		assert.ok(indexExists(db, "idx_test_table_name_collate"))
+	})
+	test("creates an index with an expression", () => {
+		const indexDef: IndexDef<TestTable> = {
+			name: "idx_test_table_name_lower",
+			tableName: "test_table",
+			columns: ["name(LOWER(name))"],
+		}
+
+		db.createIndex(indexDef)
+		assert.ok(indexExists(db, "idx_test_table_name_lower"))
+	})
+
+	test("throws an error on invalid index definition", () => {
+		const invalidIndexDef = {
+			name: "invalid_index", // Invalid name
+			tableName: "test_table",
+			columns: [], // Empty columns
+		}
+		assert.throws(
+			// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+			() => db.createIndex(invalidIndexDef as any),
+			(err: unknown) => {
+				assert(err instanceof NodeSqliteError)
+				assert.equal(err.code, "ERR_SQLITE_INDEX")
+				return true
+			}
+		)
+	})
+	test("throws an error on duplicate index name", () => {
+		const indexDef: IndexDef<TestTable> = {
+			name: "idx_test_table_name",
+			tableName: "test_table",
+			columns: ["name"],
+		}
+
+		db.createIndex(indexDef)
+		assert.ok(indexExists(db, "idx_test_table_name"))
+
+		// Try creating again - should throw an error
+		assert.throws(
+			() => db.createIndex(indexDef),
+			(err: unknown) => {
+				assert(err instanceof Error)
+				assert.equal(err.message, "index idx_test_table_name already exists")
+				return true
+			}
+		)
 	})
 })

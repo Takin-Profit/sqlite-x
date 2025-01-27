@@ -30,7 +30,6 @@ import { buildOrderByStatement } from "#order-by"
 import { buildColumnsStatement } from "#columns"
 import type { Config } from "@sqltools/formatter/lib/core/types"
 import stringify from "#stringify"
-import { buildIndexStatement } from "#idx.js"
 
 /**
  * Represents a parameter operator that references a property of type P
@@ -181,13 +180,6 @@ export class Sql<P extends DataRow> {
 		if (context.columns) {
 			parts.push(buildColumnsStatement(context.columns))
 			parts[parts.length - 1] += ";" // Add semicolon after table creation
-		}
-
-		if (context.indexes) {
-			const indexStatements = context.indexes
-				.map(idx => buildIndexStatement(idx))
-				.join(";\n")
-			parts.push(indexStatements)
 		}
 
 		if (context.values) {

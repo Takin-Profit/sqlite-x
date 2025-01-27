@@ -33,6 +33,8 @@ import {
 	type FormatterConfig,
 } from "#sql"
 import type { CleanupPragmas, DataRow, DBOptions } from "#types"
+import { buildIndexStatement, type IndexDef } from "#idx.js"
+import stringify from "#stringify.js"
 
 /**
  * Type-safe SQLite database wrapper with prepared statement caching, SQL template literals,
@@ -174,6 +176,13 @@ export class DB {
 			prepare: sql => this.prepareStatement(sql),
 			sql: builder,
 		})
+	}
+
+	createIndex<T extends DataRow>(def: IndexDef<T>): void {
+		this.#logger.debug("Creating index", stringify(def))
+		const stmt = buildIndexStatement(def)
+		this.exec(stmt)
+		this.#logger.info("Index created successfully", stringify(def))
 	}
 
 	/**

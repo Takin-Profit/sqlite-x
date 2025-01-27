@@ -19,8 +19,9 @@
   "scripts": {
     "build": "tsup",
     "test": "tsx --test --experimental-sqlite src/**/*.test.ts",
+    "test:idx": "tsx --test --experimental-sqlite --test-name-pattern \"creates index via SQL context\"",
     "test:only": "tsx --test --experimental-sqlite --test-only src/**/*.test.ts",
-    "bundle:claude": "node claude-bundle.mjs bundle ./src prompt.json"
+    "bundle:claude": "node claude-bundle.mjs"
   },
   "keywords": [
     "sqlite",

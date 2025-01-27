@@ -208,7 +208,7 @@ const config = {
 	projects: [
 		{
 			inputDir: "./src",
-			outputFile: "./db.claude.json",
+			outputFile: "./sqlitx.source.json",
 			// ignore: ["src/data"],
 		},
 	],

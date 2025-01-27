@@ -4,6 +4,7 @@
 
 import { validateColumns, type Columns } from "#columns.js"
 import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors"
+import { validateIndexDef, type IndexDef } from "#idx.js"
 import type { ToJson, ParameterOperator, FromJson } from "#sql"
 import type { DataRow } from "#types"
 import { validationErr, type ValidationError } from "#validate"
@@ -32,6 +33,7 @@ export type SqlContext<P extends DataRow> = Partial<{
 	offset: number
 	returning: (keyof P)[] | "*"
 	columns: Columns<P>
+	indexes: IndexDef<P>[]
 }>
 
 export function validateSqlContext<P extends DataRow>(
@@ -141,6 +143,29 @@ export function validateSqlContext<P extends DataRow>(
 							path: `columns${err.path ? `.${err.path}` : ""}`,
 						}))
 					)
+				}
+				break
+			}
+
+			case "indexes": {
+				const value = context[key]
+				if (!Array.isArray(value)) {
+					errors.push(
+						validationErr({
+							msg: "indexes must be an array",
+							path: "indexes",
+						})
+					)
+				} else {
+					value.forEach((idx, index) => {
+						const idxErrors = validateIndexDef(idx)
+						errors.push(
+							...idxErrors.map(err => ({
+								...err,
+								path: `indexes[${index}].${err.path || ""}`,
+							}))
+						)
+					})
 				}
 				break
 			}

@@ -1,6 +1,7 @@
 // Copyright 2025 Takin Profit. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+// noinspection t
 
 // Copyright 2025 Takin Profit. All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -29,6 +30,7 @@ import { buildOrderByStatement } from "#order-by"
 import { buildColumnsStatement } from "#columns"
 import type { Config } from "@sqltools/formatter/lib/core/types"
 import stringify from "#stringify"
+import { buildIndexStatement } from "#idx.js"
 
 /**
  * Represents a parameter operator that references a property of type P
@@ -176,26 +178,34 @@ export class Sql<P extends DataRow> {
 			parts.push(buildColsStatement(context.cols))
 		}
 
-		// Columns statement comes first
 		if (context.columns) {
 			parts.push(buildColumnsStatement(context.columns))
+			parts[parts.length - 1] += ";" // Add semicolon after table creation
 		}
 
-		// Values and Set come next
+		if (context.indexes) {
+			const indexStatements = context.indexes
+				.map(idx => buildIndexStatement(idx))
+				.join(";\n")
+			parts.push(indexStatements)
+		}
+
 		if (context.values) {
 			parts.push(buildValuesStatement(context.values, this.#params))
 		}
+
 		if (context.set) {
 			parts.push(buildSetStatement(context.set, this.#params))
 		}
 
-		// Rest remains the same
 		if (context.where) {
 			parts.push(buildWhereStatement(context.where))
 		}
+
 		if (context.orderBy) {
 			parts.push(buildOrderByStatement(context.orderBy))
 		}
+
 		if (context.limit !== undefined) {
 			parts.push(`LIMIT ${context.limit}`)
 			if (context.offset !== undefined) {
@@ -205,6 +215,7 @@ export class Sql<P extends DataRow> {
 			parts.push("LIMIT -1")
 			parts.push(`OFFSET ${context.offset}`)
 		}
+
 		if (context.returning) {
 			parts.push(
 				context.returning === "*"
@@ -212,10 +223,10 @@ export class Sql<P extends DataRow> {
 					: `RETURNING ${context.returning.join(", ")}`
 			)
 		}
+
 		return parts.join("\n")
 	}
 
-	// SQL property update
 	get sql(): string {
 		let result = this.#generatedSql
 		result += this.strings[0]
@@ -224,8 +235,8 @@ export class Sql<P extends DataRow> {
 			const op = this.paramOperators[i]
 
 			if (isSqlContext<P>(op)) {
-				const contextSql = this.#contextToSql(op)
-				result += contextSql + this.strings[i + 1]
+				result += this.#contextToSql(op)
+				result += this.strings[i + 1]
 			} else if (isRawValue(op)) {
 				result += `${op.value}${this.strings[i + 1]}`
 			} else if (typeof op === "string") {
@@ -241,9 +252,10 @@ export class Sql<P extends DataRow> {
 			}
 		}
 
-		return this.#fmt(result.trim())
+		const code = this.#fmt(result.trim())
+		console.log(`SQL: ${code}`)
+		return code
 	}
-
 	get hasJsonColumns(): boolean {
 		const { sql } = this
 		return (
@@ -589,6 +601,7 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 		sourceSQL(params: ValuesParam<P> = {} as P) {
 			try {
 				const { stmt } = props.build(params as P)
+
 				return stmt.sourceSQL
 			} catch (error) {
 				throw new NodeSqliteError(

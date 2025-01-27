@@ -166,7 +166,9 @@ export class DB {
 			build: finalParams => {
 				const { sql, namedParams, hasJsonColumns } =
 					builder.prepare(finalParams)
+
 				const stmt = this.prepareStatement(sql)
+
 				return { stmt, namedParams, hasJsonColumns }
 			},
 			prepare: sql => this.prepareStatement(sql),

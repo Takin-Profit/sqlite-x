@@ -1,3 +1,5 @@
+// noinspection t
+
 import type { InsertOptions } from "#context.js"
 import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors"
 import type { DataRow } from "#types"
@@ -5,16 +7,17 @@ import type { DataRow } from "#types"
 type BuildSqlResult = {
 	columns: string[]
 	placeholders: string[]
+	parameterOperators: string[]
 	isMulti?: boolean
 	itemCount?: number
 }
 
 function buildSqlComponents<P extends DataRow>(
 	options: InsertOptions<P>,
-	params: P
+	params: P | P[]
 ): BuildSqlResult {
-	// First check if params is Array/Set for default multi-row behavior
-	if ((Array.isArray(params) || params instanceof Set) && options === "*") {
+	// Handle batch operations
+	if (Array.isArray(params) || params instanceof Set) {
 		const items = Array.from(params)
 		if (items.length === 0) {
 			throw new NodeSqliteError(
@@ -28,19 +31,68 @@ function buildSqlComponents<P extends DataRow>(
 
 		const firstItem = items[0]
 		const columns = Object.keys(firstItem)
-		return {
-			columns,
-			placeholders: columns.map(k => `$${k}`),
-			isMulti: true,
-			itemCount: items.length,
+
+		// Handle * with batch config
+		if (Array.isArray(options) && options[0] === "*" && options.length === 2) {
+			const [, config] = options
+			const jsonColumns = new Set(
+				typeof config === "object" && "jsonColumns" in config
+					? config.jsonColumns
+					: []
+			)
+
+			// Generate unique parameter names and placeholders for each row
+			const placeholderRows = items.map((_, rowIndex) => {
+				const rowPlaceholders = columns.map(col =>
+					jsonColumns.has(col)
+						? `jsonb($${col}_${rowIndex})`
+						: `$${col}_${rowIndex}`
+				)
+				return `(${rowPlaceholders.join(", ")})`
+			})
+
+			const paramOps = items.flatMap((_, rowIndex) =>
+				columns.map(col => `$${col}_${rowIndex}`)
+			)
+
+			return {
+				columns,
+				placeholders: placeholderRows,
+				parameterOperators: paramOps,
+				isMulti: true,
+				itemCount: items.length,
+			}
+		}
+
+		// Handle simple * for batch
+		if (options === "*") {
+			const placeholderRows = items.map((_, rowIndex) => {
+				const rowPlaceholders = columns.map(col => `$${col}_${rowIndex}`)
+				return `(${rowPlaceholders.join(", ")})`
+			})
+
+			const paramOps = items.flatMap((_, rowIndex) =>
+				columns.map(col => `$${col}_${rowIndex}`)
+			)
+
+			return {
+				columns,
+				placeholders: placeholderRows,
+				parameterOperators: paramOps,
+				isMulti: true,
+				itemCount: items.length,
+			}
 		}
 	}
 
+	// Handle single record operations (rest of the code remains the same)
 	if (options === "*") {
-		const columns = Object.keys(params)
+		const columns = Object.keys(params as P)
+		const paramOps = columns.map(k => `$${k}`)
 		return {
 			columns,
-			placeholders: columns.map(k => `$${k}`),
+			placeholders: paramOps,
+			parameterOperators: paramOps,
 		}
 	}
 
@@ -57,66 +109,49 @@ function buildSqlComponents<P extends DataRow>(
 			)
 		}
 
-		if ("batch" in config) {
-			if (!Array.isArray(params) && !(params instanceof Set)) {
-				throw new NodeSqliteError(
-					"ERR_SQLITE_PARAM",
-					SqlitePrimaryResultCode.SQLITE_ERROR,
-					"Invalid parameters",
-					"Expected array or Set when using batch",
-					undefined
-				)
-			}
-
-			const items = Array.from(params)
-			if (items.length === 0) {
-				throw new NodeSqliteError(
-					"ERR_SQLITE_PARAM",
-					SqlitePrimaryResultCode.SQLITE_ERROR,
-					"Empty data set",
-					"Cannot insert empty array or set",
-					undefined
-				)
-			}
-
-			const firstItem = items[0]
-			const columns = Object.keys(firstItem)
-			const jsonColumns = new Set(
-				"jsonColumns" in config ? config.jsonColumns : []
+		if (
+			"batch" in config &&
+			config.batch &&
+			!Array.isArray(params) &&
+			!(params instanceof Set)
+		) {
+			throw new NodeSqliteError(
+				"ERR_SQLITE_PARAM",
+				SqlitePrimaryResultCode.SQLITE_ERROR,
+				"Invalid parameters",
+				"Expected array or Set when using batch",
+				undefined
 			)
+		}
+
+		if ("jsonColumns" in config) {
+			const jsonColumns = new Set(config.jsonColumns)
+			const columns = Object.keys(params as P)
+			const paramOps = columns.map(k => `$${k}`)
 
 			return {
 				columns,
 				placeholders: columns.map(col =>
 					jsonColumns.has(col) ? `jsonb($${col})` : `$${col}`
 				),
-				isMulti: true,
-				itemCount: items.length,
+				parameterOperators: paramOps,
 			}
-		}
-
-		// Handle jsonColumns case
-		if ("jsonColumns" in config) {
-			const jsonColumns = new Set(config.jsonColumns)
-			const columns = Object.keys(params)
-			const placeholders = columns.map(col =>
-				jsonColumns.has(col) ? `jsonb($${col})` : `$${col}`
-			)
-			return { columns, placeholders }
 		}
 
 		throw new NodeSqliteError(
 			"ERR_SQLITE_PARAM",
 			SqlitePrimaryResultCode.SQLITE_ERROR,
 			"Invalid configuration",
-			"Configuration must include either batch or jsonColumns",
+			"Configuration must include jsonColumns for single record",
 			undefined
 		)
 	}
 
+	// Handle explicit column array (remains the same)
 	if (Array.isArray(options)) {
 		const columns: string[] = []
 		const placeholders: string[] = []
+		const paramOps: string[] = []
 
 		for (const op of options) {
 			if (typeof op !== "string") {
@@ -142,6 +177,8 @@ function buildSqlComponents<P extends DataRow>(
 
 			const column = match[1]
 			columns.push(column)
+			paramOps.push(op)
+
 			if (op.endsWith("->json")) {
 				placeholders.push(`jsonb($${column})`)
 			} else {
@@ -149,7 +186,7 @@ function buildSqlComponents<P extends DataRow>(
 			}
 		}
 
-		return { columns, placeholders }
+		return { columns, placeholders, parameterOperators: paramOps }
 	}
 
 	throw new NodeSqliteError(
@@ -163,31 +200,39 @@ function buildSqlComponents<P extends DataRow>(
 
 export function buildValuesStatement<P extends DataRow>(
 	values: InsertOptions<P>,
-	params: P
-): string {
+	params: P | P[]
+): { sql: string; parameterOperators: string[] } {
 	const result = buildSqlComponents(values, params)
 
-	if (result.isMulti && result.itemCount) {
-		const placeholderRow = `(${result.placeholders.join(", ")})`
-
-		// For single item, don't add newlines
-		if (result.itemCount === 1) {
-			return `(${result.columns.join(", ")}) VALUES ${placeholderRow}`
+	if (
+		result.isMulti &&
+		result.itemCount &&
+		Array.isArray(result.placeholders)
+	) {
+		return {
+			sql: `(${result.columns.join(", ")}) VALUES\n  ${result.placeholders.join(",\n  ")}`,
+			parameterOperators: result.parameterOperators,
 		}
-
-		const allRows = Array(result.itemCount).fill(placeholderRow).join(",\n    ")
-		return `(${result.columns.join(", ")}) VALUES\n    ${allRows}`
 	}
 
-	return `(${result.columns.join(", ")}) VALUES (${result.placeholders.join(", ")})`
+	return {
+		sql: `(${result.columns.join(", ")}) VALUES (${result.placeholders})`,
+		parameterOperators: result.parameterOperators,
+	}
 }
 
 export function buildSetStatement<P extends DataRow>(
 	set: InsertOptions<P>,
 	params: P
-): string {
-	const { columns, placeholders } = buildSqlComponents(set, params)
+): { sql: string; parameterOperators: string[] } {
+	const { columns, placeholders, parameterOperators } = buildSqlComponents(
+		set,
+		params
+	)
 	const setPairs = columns.map((col, i) => `${col} = ${placeholders[i]}`)
 
-	return `SET ${setPairs.join(", ")}`
+	return {
+		sql: `SET ${setPairs.join(", ")}`,
+		parameterOperators,
+	}
 }

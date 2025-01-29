@@ -1,7 +1,7 @@
 import { test, beforeEach, afterEach } from "node:test"
 import assert from "node:assert/strict"
 import { DB } from "#database"
-import { isNodeSqliteError, NodeSqliteError } from "#errors"
+import { NodeSqliteError } from "#errors"
 import { raw } from "#sql.js"
 
 let db: DB
@@ -85,17 +85,20 @@ test("concatenates multiple SQL fragments with contexts", () => {
 })
 
 test("preserves SQL context validation", () => {
-	assert.throws(() => {
-		let query = db.sql`SELECT * FROM users`
-		query = query.sql`${
-			{
-				where: "INVALID",
-				orderBy: { name: "WRONG" },
-				// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-			} as any
-		}`
-		query.sourceSQL()
-	}, isNodeSqliteError)
+	assert.throws(
+		() => {
+			let query = db.sql`SELECT * FROM users`
+			query = query.sql`${
+				{
+					where: "INVALID",
+					orderBy: { name: "WRONG" },
+					// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+				} as any
+			}`
+			query.sourceSQL()
+		},
+		{ name: "NodeSqliteError" }
+	)
 })
 
 test("maintains parameter references through concatenation", () => {

@@ -77,7 +77,7 @@ function toSupportedValue(value: unknown): SupportedValueType {
 /**
  * Parameter values and contexts that can be used in SQL template literals
  */
-export type SqlTemplateValues<P extends DataRow> = ReadonlyArray<
+export type SqlTemplateValues<P extends DataRow> = Array<
 	ParamValue<P> | SqlContext<P> | RawValue
 >
 
@@ -132,7 +132,9 @@ export const raw = (
 
 export class Sql<P extends DataRow> {
 	readonly strings: readonly string[]
-	readonly paramOperators: SqlTemplateValues<P>
+	readonly paramOperators = new Set<ParamValue<P> | SqlContext<P> | RawValue>()
+
+	readonly #contextOperators = new Set<string>()
 
 	readonly formatterConfig?: Readonly<Config> | false
 	#generatedSql = ""
@@ -146,7 +148,10 @@ export class Sql<P extends DataRow> {
 		formatterConfig,
 	}: SqlOptions<P>) {
 		this.strings = strings
-		this.paramOperators = paramOperators
+
+		for (const op of paramOperators) {
+			this.paramOperators.add(op)
+		}
 
 		if (formatterConfig === false) {
 			this.formatterConfig = false
@@ -183,11 +188,19 @@ export class Sql<P extends DataRow> {
 		}
 
 		if (context.values) {
-			parts.push(buildValuesStatement(context.values, this.#params))
+			const result = buildValuesStatement(context.values, this.#params)
+			for (const op of result.parameterOperators) {
+				this.#contextOperators.add(op)
+			}
+			parts.push(result.sql)
 		}
 
 		if (context.set) {
-			parts.push(buildSetStatement(context.set, this.#params))
+			const result = buildSetStatement(context.set, this.#params)
+			for (const op of result.parameterOperators) {
+				this.#contextOperators.add(op)
+			}
+			parts.push(result.sql)
 		}
 
 		if (context.where) {
@@ -223,9 +236,8 @@ export class Sql<P extends DataRow> {
 		let result = this.#generatedSql
 		result += this.strings[0]
 
-		for (let i = 0; i < this.paramOperators.length; i++) {
-			const op = this.paramOperators[i]
-
+		let i = 0
+		for (const op of this.paramOperators) {
 			if (isSqlContext<P>(op)) {
 				result += this.#contextToSql(op)
 				result += this.strings[i + 1]
@@ -242,10 +254,12 @@ export class Sql<P extends DataRow> {
 					result += `${op} ${this.strings[i + 1]}`
 				}
 			}
+			i++
 		}
 
 		return this.#fmt(result.trim())
 	}
+
 	get hasJsonColumns(): boolean {
 		const { sql } = this
 		return (
@@ -268,15 +282,54 @@ export class Sql<P extends DataRow> {
 
 	#toNamedParams(): Record<string, SupportedValueType> {
 		const namedParams: Record<string, SupportedValueType> = {}
+		const operators = new Set([
+			...this.paramOperators,
+			...this.#contextOperators,
+		])
 
-		for (const op of this.paramOperators) {
-			// noinspection SuspiciousTypeOfGuard
+		// Handle batch params
+		if (Array.isArray(this.#params) || this.#params instanceof Set) {
+			const items = Array.isArray(this.#params)
+				? this.#params
+				: Array.from(this.#params)
+			for (let index = 0; index < items.length; index++) {
+				const row = items[index]
+				for (const [key, value] of Object.entries(row)) {
+					const operator = operators.has(`$${key}->json`)
+						? `$${key}_${index}->json`
+						: `$${key}_${index}`
+
+					if (operator.endsWith("->json")) {
+						if (
+							typeof value !== "object" &&
+							!Array.isArray(value) &&
+							value !== null
+						) {
+							throw new NodeSqliteError(
+								"ERR_SQLITE_PARAM",
+								SqlitePrimaryResultCode.SQLITE_ERROR,
+								"Invalid parameter",
+								`Parameter '${key}' must be an object or array for JSON conversion`,
+								undefined
+							)
+						}
+						namedParams[`$${key}_${index}`] = stringify(value)
+					} else {
+						namedParams[`$${key}_${index}`] = toSupportedValue(value)
+					}
+				}
+			}
+			return namedParams
+		}
+
+		// Handle single record params
+		for (const op of operators) {
 			if (typeof op !== "string" || op.endsWith("<-json")) {
 				continue
 			}
 
 			const paramName = op.split("->")[0].substring(1)
-			const value = this.#params[paramName]
+			const value = (this.#params as P)[paramName]
 
 			if (value === undefined) {
 				throw new NodeSqliteError(
@@ -307,11 +360,9 @@ export class Sql<P extends DataRow> {
 				namedParams[`$${paramName}`] = toSupportedValue(value)
 			}
 		}
-
 		return namedParams
 	}
 
-	// In Sql class
 	prepare(params: P): {
 		sql: string
 		namedParams: Record<string, SupportedValueType>
@@ -319,9 +370,9 @@ export class Sql<P extends DataRow> {
 	} {
 		this.#params = params
 
-		const contexts = this.paramOperators.filter(
-			(op): op is SqlContext<P> =>
-				typeof op === "object" && !Array.isArray(op) && !isRawValue(op)
+		// Convert Set to array just for context filtering
+		const contexts = Array.from(this.paramOperators).filter(
+			op => typeof op === "object" && !Array.isArray(op) && !isRawValue(op)
 		)
 
 		const validationErrors = contexts.flatMap(context =>
@@ -338,7 +389,9 @@ export class Sql<P extends DataRow> {
 			)
 		}
 
-		const combinationErrors = validateContextCombination(contexts)
+		const combinationErrors = validateContextCombination(
+			contexts as SqlContext<P>[]
+		)
 
 		if (combinationErrors.length > 0) {
 			throw new NodeSqliteError(
@@ -357,7 +410,6 @@ export class Sql<P extends DataRow> {
 		}
 	}
 }
-
 type SingleRow<P extends DataRow> = {
 	[K in keyof P]: P[K]
 }

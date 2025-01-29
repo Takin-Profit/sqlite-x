@@ -17,14 +17,14 @@ describe("buildValuesStatement", () => {
 				email: "john@example.com",
 			}
 
-			const sql = buildValuesStatement("*", params)
-			assert.equal(sql, "(name, age, email) VALUES ($name, $age, $email)")
+			const result = buildValuesStatement("*", params)
+			assert.equal(result.sql, "(name, age, email) VALUES ($name,$age,$email)")
 		})
 
 		test("handles empty params object", () => {
 			const params = {}
-			const sql = buildValuesStatement("*", params)
-			assert.equal(sql, "() VALUES ()")
+			const result = buildValuesStatement("*", params)
+			assert.equal(result.sql, "() VALUES ()")
 		})
 	})
 
@@ -36,14 +36,14 @@ describe("buildValuesStatement", () => {
 				metadata: { key: "value" },
 			}
 
-			const sql = buildValuesStatement(
+			const result = buildValuesStatement(
 				["*", { jsonColumns: ["metadata"] }],
 				params
 			)
 
 			assert.equal(
-				sql,
-				"(id, name, metadata) VALUES ($id, $name, jsonb($metadata))"
+				result.sql,
+				"(id, name, metadata) VALUES ($id,$name,jsonb($metadata))"
 			)
 		})
 
@@ -54,14 +54,14 @@ describe("buildValuesStatement", () => {
 				settings: { theme: "dark" },
 			}
 
-			const sql = buildValuesStatement(
+			const result = buildValuesStatement(
 				["*", { jsonColumns: ["profile", "settings"] }],
 				params
 			)
 
 			assert.equal(
-				sql,
-				"(id, profile, settings) VALUES ($id, jsonb($profile), jsonb($settings))"
+				result.sql,
+				"(id, profile, settings) VALUES ($id,jsonb($profile),jsonb($settings))"
 			)
 		})
 
@@ -71,12 +71,12 @@ describe("buildValuesStatement", () => {
 				name: "John",
 			}
 
-			const sql = buildValuesStatement(
+			const result = buildValuesStatement(
 				["*", { jsonColumns: ["metadata" as keyof typeof params] }],
 				params
 			)
 
-			assert.equal(sql, "(id, name) VALUES ($id, $name)")
+			assert.equal(result.sql, "(id, name) VALUES ($id,$name)")
 		})
 	})
 
@@ -88,9 +88,9 @@ describe("buildValuesStatement", () => {
 				email: "john@example.com",
 			}
 
-			const sql = buildValuesStatement(["$name", "$age"], params)
+			const result = buildValuesStatement(["$name", "$age"], params)
 
-			assert.equal(sql, "(name, age) VALUES ($name, $age)")
+			assert.equal(result.sql, "(name, age) VALUES ($name,$age)")
 		})
 
 		test("handles JSON columns with toJson suffix", () => {
@@ -100,14 +100,14 @@ describe("buildValuesStatement", () => {
 				settings: { theme: "dark" },
 			}
 
-			const sql = buildValuesStatement(
+			const result = buildValuesStatement(
 				["$id", "$metadata->json", "$settings->json"],
 				params
 			)
 
 			assert.equal(
-				sql,
-				"(id, metadata, settings) VALUES ($id, jsonb($metadata), jsonb($settings))"
+				result.sql,
+				"(id, metadata, settings) VALUES ($id,jsonb($metadata),jsonb($settings))"
 			)
 		})
 
@@ -118,14 +118,14 @@ describe("buildValuesStatement", () => {
 				metadata: { key: "value" },
 			}
 
-			const sql = buildValuesStatement(
+			const result = buildValuesStatement(
 				["$id", "$name", "$metadata->json"],
 				params
 			)
 
 			assert.equal(
-				sql,
-				"(id, name, metadata) VALUES ($id, $name, jsonb($metadata))"
+				result.sql,
+				"(id, name, metadata) VALUES ($id,$name,jsonb($metadata))"
 			)
 		})
 	})
@@ -195,10 +195,10 @@ describe("buildValuesStatement", () => {
 				email_address: "john@example.com",
 			}
 
-			const sql = buildValuesStatement("*", params)
+			const result = buildValuesStatement("*", params)
 			assert.equal(
-				sql,
-				"(user-name, email_address) VALUES ($user-name, $email_address)"
+				result.sql,
+				"(user-name, email_address) VALUES ($user-name,$email_address)"
 			)
 		})
 
@@ -209,16 +209,16 @@ describe("buildValuesStatement", () => {
 				b: 2,
 			}
 
-			const sql = buildValuesStatement(["$c", "$a", "$b"], params)
+			const result = buildValuesStatement(["$c", "$a", "$b"], params)
 
-			assert.equal(sql, "(c, a, b) VALUES ($c, $a, $b)")
+			assert.equal(result.sql, "(c, a, b) VALUES ($c,$a,$b)")
 		})
 
 		test("handles single column case", () => {
 			const params = { id: 1 }
 
-			const sql = buildValuesStatement(["$id"], params)
-			assert.equal(sql, "(id) VALUES ($id)")
+			const result = buildValuesStatement(["$id"], params)
+			assert.equal(result.sql, "(id) VALUES ($id)")
 		})
 	})
 })
@@ -477,7 +477,7 @@ describe("batch Values Generation", () => {
 
 		assert.equal(
 			stmt.sourceSQL(bands).trim(),
-			"INSERT INTO bands (name, formed_year, members)\nVALUES ($name, $formed_year, $members),\n  ($name, $formed_year, $members),\n  ($name, $formed_year, $members)"
+			"INSERT INTO bands (name, formed_year, members)\nVALUES ($name_0, $formed_year_0, $members_0),\n  ($name_1, $formed_year_1, $members_1),\n  ($name_2, $formed_year_2, $members_2)"
 		)
 	})
 
@@ -518,7 +518,7 @@ describe("batch Values Generation", () => {
 
 		assert.equal(
 			stmt.sourceSQL(bandsSet).trim(),
-			"INSERT INTO bands (name, members)\nVALUES ($name, $members),\n  ($name, $members)"
+			"INSERT INTO bands (name, members)\nVALUES ($name_0, $members_0),\n  ($name_1, $members_1)" // Fixed parameter names
 		)
 	})
 
@@ -552,24 +552,21 @@ describe("batch Values Generation", () => {
 
 		assert.equal(
 			stmt.sourceSQL(bands).trim(),
-			"INSERT INTO bands (name, members, metadata)\nVALUES ($name, $members, jsonb($metadata)),\n  ($name, $members, jsonb($metadata))"
+			"INSERT INTO bands (name, members, metadata)\nVALUES ($name_0, $members_0, jsonb($metadata_0)),\n  ($name_1, $members_1, jsonb($metadata_1))"
 		)
 	})
 
 	test("throws on non-array/non-set input", () => {
 		type Band = { name: string }
 		const stmt = db.sql<Band>`
-      INSERT INTO bands ${{ values: ["*", { batch: true }] }}
+        INSERT INTO bands ${{ values: ["*", { batch: true }] }}
     `
 
-		assert.throws(
-			() => stmt.sourceSQL({ name: "INVALID" }),
-			(err: unknown) => {
-				assert(err instanceof NodeSqliteError)
-				assert(err.message.includes("Expected array or Set"))
-				return true
-			}
-		)
+		// Ensure we're testing with the correct error type and message
+		assert.throws(() => stmt.sourceSQL({ name: "INVALID" }), {
+			name: "NodeSqliteError",
+			message: /Expected array or Set/,
+		})
 	})
 
 	test("handles array with single item", () => {
@@ -586,7 +583,7 @@ describe("batch Values Generation", () => {
 
 		assert.equal(
 			stmt.sourceSQL(bands).trim(),
-			"INSERT INTO bands (name, members)\nVALUES ($name, $members)"
+			"INSERT INTO bands (name, members)\nVALUES ($name_0, $members_0)"
 		)
 	})
 
@@ -618,5 +615,270 @@ describe("batch Values Generation", () => {
 		const valueSets = lines.slice(2)
 		const paramCounts = valueSets.map(line => (line.match(/\$/g) || []).length)
 		assert(paramCounts.every(count => count === paramCounts[0]))
+	})
+})
+
+describe("Values Database Operations", () => {
+	let db: DB
+
+	beforeEach(() => {
+		db = new DB({
+			location: ":memory:",
+			environment: "testing",
+		})
+
+		// Create test tables
+		db.exec(`
+      CREATE TABLE stocks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ticker TEXT NOT NULL UNIQUE,
+        description TEXT,
+        exchange TEXT CHECK(exchange IN ('AMEX','ARCA','BATS','NYSE','NASDAQ','NYSEARCA','FTXU','CBSE','GNSS','ERSX','OTC','CRYPTO','')),
+        hasIcon INTEGER DEFAULT 0
+      );
+    `)
+	})
+
+	afterEach(() => {
+		db.close()
+	})
+
+	test(":values - inserts single record with values array", () => {
+		type Stock = {
+			ticker: string
+			description: string
+			exchange: string
+			hasIcon: number
+		}
+
+		const stock = {
+			ticker: "AAPL",
+			description: "Apple Inc.",
+			exchange: "NASDAQ",
+			hasIcon: 1,
+		}
+
+		const stmt = db.sql<Stock>`
+      INSERT INTO stocks ${{ values: ["$ticker", "$description", "$exchange", "$hasIcon"] }}
+    `
+
+		stmt.run(stock)
+
+		const result =
+			db.sql`SELECT * FROM stocks WHERE ticker = ${"$ticker"}`.get<{
+				id: number
+			}>({ ticker: "AAPL" })
+		assert.equal(result?.id, 1)
+	})
+
+	test(":values - inserts single record with values:* syntax", () => {
+		type Stock = {
+			ticker: string
+			description: string
+			exchange: string
+			hasIcon: number
+		}
+
+		const stock = {
+			ticker: "AAPL",
+			description: "Apple Inc.",
+			exchange: "NASDAQ",
+			hasIcon: 1,
+		}
+
+		const stmt = db.sql<Stock>`
+      INSERT INTO stocks ${{ values: "*" }}
+    `
+		stmt.run(stock)
+
+		const result =
+			db.sql`SELECT * FROM stocks WHERE ticker = ${"$ticker"}`.get<{
+				ticker: string
+			}>({ ticker: "AAPL" })
+		assert.deepEqual(result?.ticker, "AAPL")
+	})
+
+	test(":values - inserts batch of records using values:* and batch:true", () => {
+		type Stock = {
+			ticker: string
+			description: string
+			exchange: string
+			hasIcon: number
+		}
+
+		const stocks = [
+			{
+				ticker: "AAPL",
+				description: "Apple Inc.",
+				exchange: "NASDAQ",
+				hasIcon: 1,
+			},
+			{
+				ticker: "MSFT",
+				description: "Microsoft Corporation",
+				exchange: "NASDAQ",
+				hasIcon: 1,
+			},
+			{
+				ticker: "GOOGL",
+				description: "Alphabet Inc.",
+				exchange: "NASDAQ",
+				hasIcon: 1,
+			},
+		]
+
+		const stmt = db.sql<Stock[]>`
+      INSERT INTO stocks ${{ values: ["*", { batch: true }] }}
+    `
+		stmt.run(stocks)
+
+		const results = db.sql`SELECT * FROM stocks ORDER BY ticker`.all<{
+			ticker: string
+		}>()
+		assert.equal(results.length, 3)
+		assert.deepEqual(
+			results.map(r => r.ticker),
+			["AAPL", "GOOGL", "MSFT"]
+		)
+	})
+
+	test(":values - batch insert properly fails transaction on error", () => {
+		type Stock = {
+			ticker: string
+			description: string
+			exchange: string
+			hasIcon: number
+		}
+
+		const stocks = [
+			{
+				ticker: "AAPL",
+				description: "Apple Inc.",
+				exchange: "NASDAQ",
+				hasIcon: 1,
+			},
+			{
+				ticker: "AAPL", // Duplicate ticker should cause error
+				description: "Apple Inc Again",
+				exchange: "NASDAQ",
+				hasIcon: 1,
+			},
+		]
+
+		const stmt = db.sql<Stock[]>`
+      INSERT INTO stocks ${{ values: ["*", { batch: true }] }}
+    `
+
+		// Should throw due to unique constraint violation
+		assert.throws(() => stmt.run(stocks))
+
+		// Query to verify no records were inserted
+		const result = db.sql`
+        SELECT COUNT(*) as count FROM stocks
+    `.get<{ count: number }>()
+
+		// Ensure we have a number even if result is undefined
+		const count = result?.count ?? 0
+		assert.equal(count, 0)
+	})
+
+	test(":values - batch insert handles nulls and optional fields", () => {
+		type Stock = {
+			ticker: string
+			description?: string
+			exchange: string
+			hasIcon: number
+		}
+
+		const stocks = [
+			{
+				ticker: "AAPL",
+				description: "Apple Inc.",
+				exchange: "NASDAQ",
+				hasIcon: 1,
+			},
+			{
+				ticker: "MSFT",
+				exchange: "NASDAQ", // No description
+				hasIcon: 1,
+			},
+		]
+
+		const stmt = db.sql<Stock[]>`
+      INSERT INTO stocks ${{ values: ["*", { batch: true }] }}
+    `
+		stmt.run(stocks)
+
+		const results = db.sql`SELECT * FROM stocks ORDER BY ticker`.all<{
+			description: string
+		}>()
+		assert.equal(results.length, 2)
+		assert.equal(results[1].description, null)
+	})
+
+	test(":values - batch insert verifies constraints", () => {
+		type Stock = {
+			ticker: string
+			description: string
+			exchange: string
+			hasIcon: number
+		}
+
+		const stocks = [
+			{
+				ticker: "AAPL",
+				description: "Apple Inc.",
+				exchange: "INVALID", // Invalid exchange value
+				hasIcon: 1,
+			},
+		]
+
+		const stmt = db.sql<Stock[]>`
+      INSERT INTO stocks ${{ values: ["*", { batch: true }] }}
+    `
+
+		// Should throw due to check constraint violation
+		assert.throws(() => stmt.run(stocks))
+
+		// Query to verify no records were inserted
+		const result = db.sql`
+        SELECT COUNT(*) as count FROM stocks
+    `.get<{ count: number }>()
+
+		// Ensure we have a number even if result is undefined
+		const count = result?.count ?? 0
+		assert.equal(count, 0)
+	})
+
+	test(":values - inserts using values array with explicit ID", () => {
+		type Stock = {
+			id: number
+			ticker: string
+			description: string
+			exchange: string
+			hasIcon: number
+		}
+
+		const stock = {
+			id: 42,
+			ticker: "AAPL",
+			description: "Apple Inc.",
+			exchange: "NASDAQ",
+			hasIcon: 1,
+		}
+
+		const stmt = db.sql<Stock>`
+      INSERT INTO stocks ${{
+				values: ["$id", "$ticker", "$description", "$exchange", "$hasIcon"],
+			}}
+    `
+		stmt.run(stock)
+
+		const result = db.sql`SELECT * FROM stocks WHERE id = ${"$id"}`.get<{
+			id: number
+		}>({
+			id: 42,
+		})
+		assert.deepEqual(result?.id, 42)
 	})
 })

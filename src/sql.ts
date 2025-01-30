@@ -431,7 +431,7 @@ export class Sql<P extends DataRow, RET = P> {
 	}
 }
 type SingleRow<P extends DataRow> = {
-	[K in keyof P]: P[K]
+	[K in keyof P]?: P[K]
 }
 
 // Type for values params that can be single row or multiple rows

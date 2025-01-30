@@ -21,14 +21,14 @@ export type InsertOptions<P extends DataRow> =
 	| "*"
 	| ["*", { jsonColumns?: (keyof P)[]; batch?: boolean }]
 
-export type ColsOptions<P extends DataRow> =
+export type ColumnOptions<P extends DataRow> =
 	| (keyof P | FromJson<P> | ToJson<P>)[]
 	| "*"
 	| ["*", { jsonColumns: (keyof P)[] }]
 
 // Core SQL context type
 export type SqlContext<P extends DataRow, R = P> = Partial<{
-	columns: ColsOptions<P>
+	columns: ColumnOptions<P>
 	values: InsertOptions<P>
 	set: SetOptions<P>
 	where: WhereClause<P>
@@ -495,7 +495,7 @@ export function combineContexts<P extends DataRow, R = P>(
 }
 
 export function buildColsStatement<P extends DataRow>(
-	cols: ColsOptions<P>
+	cols: ColumnOptions<P>
 ): string {
 	if (cols === "*") {
 		return "*"

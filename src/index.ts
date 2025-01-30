@@ -58,10 +58,16 @@ export type {
 	LockingModes,
 } from "#pragmas"
 
-export type { SqlContext } from "#context"
+export type {
+	SqlContext,
+	ValueType,
+	SetOptions,
+	InsertOptions,
+	ColumnOptions,
+} from "#context"
 
 export type {
-	Schema as Columns,
+	Schema,
 	ValidColumnTypeMap,
 	ConstraintPatterns,
 	DataType,

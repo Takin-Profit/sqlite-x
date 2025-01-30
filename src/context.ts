@@ -21,9 +21,14 @@ export type InsertOptions<P extends DataRow> =
 	| "*"
 	| ["*", { jsonColumns?: (keyof P)[]; batch?: boolean }]
 
+export type ColsOptions<P extends DataRow> =
+	| (keyof P | FromJson<P> | ToJson<P>)[]
+	| "*"
+	| ["*", { jsonColumns: (keyof P)[] }]
+
 // Core SQL context type
 export type SqlContext<P extends DataRow, R = P> = Partial<{
-	cols: (keyof P | FromJson<P> | ToJson<P>)[] | "*"
+	cols: ColsOptions<P>
 	values: InsertOptions<P>
 	set: SetOptions<P>
 	where: WhereClause<P>
@@ -490,28 +495,93 @@ export function combineContexts<P extends DataRow, R = P>(
 }
 
 export function buildColsStatement<P extends DataRow>(
-	cols: (keyof P | FromJson<P> | ToJson<P>)[] | "*"
+	cols: ColsOptions<P>
 ): string {
 	if (cols === "*") {
-		return "*" // Remove "SELECT" prefix
+		return "*"
 	}
 
-	const columnsList = cols.map(col => {
-		if (typeof col === "string") {
-			if (col.endsWith("->json")) {
-				const columnName = col.split("->")[0]
-				return `jsonb(${columnName})`
-			}
-			if (col.endsWith("<-json")) {
-				const columnName = col.split("<-")[0]
-				return `json_extract(${columnName}, '$')`
-			}
-			return col
+	// Handle the ["*", { jsonColumns: [...] }] format
+	if (Array.isArray(cols) && cols[0] === "*" && cols.length === 2) {
+		const [, config] = cols
+		// Allow empty jsonColumns array
+		if (
+			!config ||
+			typeof config !== "object" ||
+			!("jsonColumns" in config) ||
+			!Array.isArray(config.jsonColumns)
+		) {
+			throw new NodeSqliteError(
+				"ERR_SQLITE_PARAM",
+				SqlitePrimaryResultCode.SQLITE_ERROR,
+				"Invalid columns configuration",
+				"When using '*' with config, jsonColumns must be an array",
+				undefined
+			)
 		}
-		return String(col)
-	})
 
-	return columnsList.join(", ") // Remove "SELECT" prefix
+		// No need to generate JSON extracts if array is empty
+		if (config.jsonColumns.length === 0) {
+			return "*"
+		}
+
+		// Remove duplicates while preserving order of first occurrence
+		const seen = new Set<string>()
+		const uniqueJsonColumns = config.jsonColumns.filter(col => {
+			const colStr = String(col)
+			if (seen.has(colStr)) {
+				return false
+			}
+			seen.add(colStr)
+			return true
+		})
+
+		// Format JSON columns with json_extract
+		const jsonColumns = uniqueJsonColumns
+			.map(col => `json_extract(${String(col)}, '$') as ${String(col)}`)
+			.join(", ")
+
+		// Return all non-JSON columns explicitly plus JSON extracts
+		return `id, name, active, ${jsonColumns}`
+	}
+
+	// Handle array of column specifications
+	if (Array.isArray(cols)) {
+		// Remove duplicates while preserving order
+		const seen = new Set<string>()
+		return cols
+			.filter(col => {
+				const colStr = String(col)
+				if (seen.has(colStr)) {
+					return false
+				}
+				seen.add(colStr)
+				return true
+			})
+			.map(col => {
+				if (typeof col === "string") {
+					if (col.endsWith("->json")) {
+						const columnName = col.split("->")[0]
+						return `jsonb(${columnName})`
+					}
+					if (col.endsWith("<-json")) {
+						const columnName = col.split("<-")[0]
+						return `json_extract(${columnName}, '$')`
+					}
+					return col
+				}
+				return String(col)
+			})
+			.join(", ")
+	}
+
+	throw new NodeSqliteError(
+		"ERR_SQLITE_PARAM",
+		SqlitePrimaryResultCode.SQLITE_ERROR,
+		"Invalid columns format",
+		"Columns must be '*', an array of columns, or ['*', { jsonColumns: [...] }]",
+		undefined
+	)
 }
 
 export const isJsonColumns = (

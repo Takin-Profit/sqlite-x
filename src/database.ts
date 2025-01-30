@@ -155,11 +155,11 @@ export class DB {
 	 * @param params SQL template parameters and contexts
 	 * @returns Type-safe statement executor
 	 */
-	sql<P extends DataRow, R = unknown>(
+	sql<P extends DataRow, R = P>(
 		strings: TemplateStringsArray,
-		...params: SqlTemplateValues<P>
+		...params: SqlTemplateValues<P, R>
 	) {
-		const builder = new Sql<P>({
+		const builder = new Sql<P, R>({
 			strings,
 			paramOperators: params,
 			formatterConfig: this.#formatConfig,

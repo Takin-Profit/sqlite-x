@@ -22,7 +22,7 @@ export type InsertOptions<P extends DataRow> =
 	| ["*", { jsonColumns?: (keyof P)[]; batch?: boolean }]
 
 // Core SQL context type
-export type SqlContext<P extends DataRow> = Partial<{
+export type SqlContext<P extends DataRow, R = P> = Partial<{
 	cols: (keyof P | FromJson<P> | ToJson<P>)[] | "*"
 	values: InsertOptions<P>
 	set: SetOptions<P>
@@ -30,11 +30,11 @@ export type SqlContext<P extends DataRow> = Partial<{
 	orderBy: Partial<Record<keyof P, "ASC" | "DESC">>
 	limit: number
 	offset: number
-	returning: (keyof P)[] | "*" | ["*", { jsonColumns?: (keyof P)[] }]
+	returning: (keyof R)[] | "*" | ["*", { jsonColumns?: (keyof R)[] }]
 	columns: Columns<P>
 }>
 
-export function validateSqlContext<P extends DataRow>(
+export function validateSqlContext<P extends DataRow, R = P>(
 	value: unknown
 ): ValidationError[] {
 	const errors: ValidationError[] = []
@@ -332,9 +332,9 @@ function isValidValueType(value: string): boolean {
 	)
 }
 
-export function isSqlContext<P extends DataRow>(
+export function isSqlContext<P extends DataRow, R = P>(
 	value: unknown
-): value is SqlContext<P> {
+): value is SqlContext<P, R> {
 	return validateSqlContext<P>(value).length === 0
 }
 
@@ -344,8 +344,8 @@ type ContextValidationError = {
 	clauses?: string[]
 }
 
-export function validateContextCombination<P extends DataRow>(
-	contexts: SqlContext<P>[]
+export function validateContextCombination<P extends DataRow, R = P>(
+	contexts: SqlContext<P, R>[]
 ): ContextValidationError[] {
 	const errors: ContextValidationError[] = []
 
@@ -374,7 +374,7 @@ export function validateContextCombination<P extends DataRow>(
 				continue
 			}
 
-			const clauseKey = clause as keyof SqlContext<P>
+			const clauseKey = clause as keyof SqlContext<P, R>
 
 			// Check if this is a unique clause that we've seen before
 			if (uniqueClauses.has(clauseKey) && seenClauses.has(clauseKey)) {
@@ -389,7 +389,7 @@ export function validateContextCombination<P extends DataRow>(
 			const incompatibleWith = incompatiblePairs.get(clause)
 			if (incompatibleWith) {
 				for (const otherClause of incompatibleWith) {
-					if (seenClauses.has(otherClause as keyof SqlContext<P>)) {
+					if (seenClauses.has(otherClause as keyof SqlContext<P, R>)) {
 						errors.push({
 							type: "INCOMPATIBLE_CLAUSE",
 							message: `Clauses "${clause}" and "${otherClause}" cannot be used together`,
@@ -406,9 +406,9 @@ export function validateContextCombination<P extends DataRow>(
 	return errors
 }
 
-export function combineContexts<P extends DataRow>(
-	contexts: SqlContext<P>[]
-): SqlContext<P> {
+export function combineContexts<P extends DataRow, R = P>(
+	contexts: SqlContext<P, R>[]
+): SqlContext<P, R> {
 	// First validate the combination
 	const errors = validateContextCombination(contexts)
 	if (errors.length > 0) {
@@ -458,10 +458,10 @@ export function combineContexts<P extends DataRow>(
 		} as Partial<Record<keyof P, "ASC" | "DESC">>
 	}
 
-	return contexts.reduce<SqlContext<P>>(
+	return contexts.reduce<SqlContext<P, R>>(
 		(combined, current) => {
 			// Create new object with explicit property assignments
-			const result: SqlContext<P> = {}
+			const result: SqlContext<P, R> = {}
 
 			// Assign values from combined if they exist
 			// sourcery skip: use-braces
@@ -485,7 +485,7 @@ export function combineContexts<P extends DataRow>(
 
 			return result
 		},
-		{} as SqlContext<P>
+		{} as SqlContext<P, R>
 	)
 }
 

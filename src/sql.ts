@@ -78,8 +78,8 @@ function toSupportedValue(value: unknown): SupportedValueType {
 /**
  * Parameter values and contexts that can be used in SQL template literals
  */
-export type SqlTemplateValues<P extends DataRow> = Array<
-	ParamValue<P> | SqlContext<P> | RawValue
+export type SqlTemplateValues<P extends DataRow, R = P> = Array<
+	ParamValue<P> | SqlContext<P, R> | RawValue
 >
 
 /**
@@ -101,9 +101,9 @@ export type FormatterConfig =
 /**
  * Options for initializing SQL builder
  */
-export type SqlOptions<P extends DataRow> = {
+export type SqlOptions<P extends DataRow, R = P> = {
 	strings: readonly string[]
-	paramOperators: SqlTemplateValues<P>
+	paramOperators: SqlTemplateValues<P, R>
 	formatterConfig?: FormatterConfig
 	generatedSql?: string
 }
@@ -131,9 +131,11 @@ export const raw = (
 	} as RawValue
 }
 
-export class Sql<P extends DataRow> {
+export class Sql<P extends DataRow, RET = P> {
 	readonly strings: readonly string[]
-	readonly paramOperators = new Set<ParamValue<P> | SqlContext<P> | RawValue>()
+	readonly paramOperators = new Set<
+		ParamValue<P> | SqlContext<P, RET> | RawValue
+	>()
 
 	readonly #contextOperators = new Set<string>()
 
@@ -147,7 +149,7 @@ export class Sql<P extends DataRow> {
 		paramOperators,
 		generatedSql,
 		formatterConfig,
-	}: SqlOptions<P>) {
+	}: SqlOptions<P, RET>) {
 		this.strings = strings
 
 		for (const op of paramOperators) {
@@ -176,7 +178,7 @@ export class Sql<P extends DataRow> {
 		return sql
 	}
 
-	#contextToSql(context: SqlContext<P>): string {
+	#contextToSql(context: SqlContext<P, RET>): string {
 		const parts: string[] = []
 
 		if (context.cols) {
@@ -256,7 +258,7 @@ export class Sql<P extends DataRow> {
 
 		let i = 0
 		for (const op of this.paramOperators) {
-			if (isSqlContext<P>(op)) {
+			if (isSqlContext<P, RET>(op)) {
 				result += this.#contextToSql(op)
 				result += this.strings[i + 1]
 			} else if (isRawValue(op)) {
@@ -394,7 +396,7 @@ export class Sql<P extends DataRow> {
 		)
 
 		const validationErrors = contexts.flatMap(context =>
-			validateSqlContext<P>(context)
+			validateSqlContext<P, RET>(context)
 		)
 
 		if (validationErrors.length > 0) {
@@ -407,8 +409,8 @@ export class Sql<P extends DataRow> {
 			)
 		}
 
-		const combinationErrors = validateContextCombination(
-			contexts as SqlContext<P>[]
+		const combinationErrors = validateContextCombination<P, RET>(
+			contexts as SqlContext<P, RET>[]
 		)
 
 		if (combinationErrors.length > 0) {
@@ -468,7 +470,7 @@ export interface XStatementSync<P extends DataRow, RET = unknown> {
 	/** Chain another SQL template literal */
 	sql(
 		strings: TemplateStringsArray,
-		...params: SqlTemplateValues<P>
+		...params: SqlTemplateValues<P, RET>
 	): XStatementSync<P, RET>
 }
 
@@ -502,14 +504,14 @@ export function parseJsonColumns(row: DataRow): DataRow {
 	}
 	return result
 }
-type CreateXStatementSyncProps<P extends DataRow> = {
+type CreateXStatementSyncProps<P extends DataRow, R = P> = {
 	build: (params: P) => {
 		stmt: StatementSync
 		namedParams: Record<string, SupportedValueType>
 		hasJsonColumns: boolean
 	}
 	prepare: (sql: string) => StatementSync
-	sql: Sql<P>
+	sql: Sql<P, R>
 }
 
 const createErrorMessage = <P extends DataRow>(
@@ -540,7 +542,7 @@ const createErrorMessage = <P extends DataRow>(
  */
 // Update the factory function
 export function createXStatementSync<P extends DataRow, RET = unknown>(
-	props: CreateXStatementSyncProps<P>
+	props: CreateXStatementSyncProps<P, RET>
 ): XStatementSync<P, RET> {
 	return {
 		all<R = RET>(params: ValuesParam<P> = {} as P) {
@@ -705,14 +707,20 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 			}
 		},
 
-		sql(strings: TemplateStringsArray, ...params: SqlTemplateValues<P>) {
-			const newBuilder = new Sql({
+		/**
+		 * Creates a type-safe SQL query builder using template literals.
+		 * @param strings SQL template strings
+		 * @param params SQL template parameters and contexts
+		 * @returns Type-safe statement executor
+		 */
+		sql(strings: TemplateStringsArray, ...params: SqlTemplateValues<P, RET>) {
+			const newBuilder = new Sql<P, RET>({
 				strings,
 				paramOperators: params,
 				generatedSql: props.sql.sql,
 				formatterConfig: props.sql.formatterConfig,
 			})
-			return createXStatementSync({
+			return createXStatementSync<P, RET>({
 				build: finalParams => {
 					const {
 						sql: sqlString,

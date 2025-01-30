@@ -10,7 +10,7 @@ import {
 	validateSqlContext,
 	type SqlContext,
 } from "./context.js"
-import { buildColumnsStatement, type Columns } from "#columns.js"
+import { buildSchema, type Schema } from "#schema.js"
 
 type TestUser = {
 	id: number
@@ -305,7 +305,7 @@ describe("Foreign Key Column Definitions", () => {
 			userId: number
 		}
 
-		const columns: Columns<TestTable> = {
+		const columns: Schema<TestTable> = {
 			id: "INTEGER PRIMARY KEY",
 			userId: "INTEGER NOT NULL",
 			$$foreignKeys: [
@@ -319,7 +319,7 @@ describe("Foreign Key Column Definitions", () => {
 			],
 		}
 
-		const sql = buildColumnsStatement(columns)
+		const sql = buildSchema(columns)
 		assert.equal(
 			sql,
 			"(\n  id INTEGER PRIMARY KEY,\n  userId INTEGER NOT NULL,\n  FOREIGN KEY(userId) REFERENCES users(id)\n)"
@@ -333,7 +333,7 @@ describe("Foreign Key Column Definitions", () => {
 			lastName: string
 		}
 
-		const columns: Columns<TestTable> = {
+		const columns: Schema<TestTable> = {
 			id: "INTEGER PRIMARY KEY",
 			firstName: "TEXT NOT NULL",
 			lastName: "TEXT NOT NULL",
@@ -348,7 +348,7 @@ describe("Foreign Key Column Definitions", () => {
 			],
 		}
 
-		const sql = buildColumnsStatement(columns)
+		const sql = buildSchema(columns)
 		assert.equal(
 			sql,
 			"(\n  id INTEGER PRIMARY KEY,\n  firstName TEXT NOT NULL,\n  lastName TEXT NOT NULL,\n  FOREIGN KEY(firstName, lastName) REFERENCES users(first, last)\n)"
@@ -361,7 +361,7 @@ describe("Foreign Key Column Definitions", () => {
 			departmentId: number
 		}
 
-		const columns: Columns<TestTable> = {
+		const columns: Schema<TestTable> = {
 			id: "INTEGER PRIMARY KEY",
 			departmentId: "INTEGER NOT NULL",
 			$$foreignKeys: [
@@ -377,7 +377,7 @@ describe("Foreign Key Column Definitions", () => {
 			],
 		}
 
-		const sql = buildColumnsStatement(columns)
+		const sql = buildSchema(columns)
 		assert.equal(
 			sql,
 			"(\n  id INTEGER PRIMARY KEY,\n  departmentId INTEGER NOT NULL,\n  FOREIGN KEY(departmentId) REFERENCES departments(id) ON DELETE CASCADE ON UPDATE SET NULL\n)"
@@ -391,7 +391,7 @@ describe("Foreign Key Column Definitions", () => {
 			groupId: number
 		}
 
-		const columns: Columns<TestTable> = {
+		const columns: Schema<TestTable> = {
 			id: "INTEGER PRIMARY KEY",
 			userId: "INTEGER NOT NULL",
 			groupId: "INTEGER NOT NULL",
@@ -414,7 +414,7 @@ describe("Foreign Key Column Definitions", () => {
 			],
 		}
 
-		const sql = buildColumnsStatement(columns)
+		const sql = buildSchema(columns)
 		assert.equal(
 			sql,
 			"(\n  id INTEGER PRIMARY KEY,\n  userId INTEGER NOT NULL,\n  groupId INTEGER NOT NULL,\n  FOREIGN KEY(userId) REFERENCES users(id),\n  FOREIGN KEY(groupId) REFERENCES groups(id) ON DELETE CASCADE\n)"
@@ -427,7 +427,7 @@ describe("Foreign Key Column Definitions", () => {
 			parentId: number
 		}
 
-		const columns: Columns<TestTable> = {
+		const columns: Schema<TestTable> = {
 			id: "INTEGER PRIMARY KEY",
 			parentId: "INTEGER",
 			$$foreignKeys: [
@@ -442,7 +442,7 @@ describe("Foreign Key Column Definitions", () => {
 			],
 		}
 
-		const sql = buildColumnsStatement(columns)
+		const sql = buildSchema(columns)
 		assert.equal(
 			sql,
 			"(\n  id INTEGER PRIMARY KEY,\n  parentId INTEGER,\n  FOREIGN KEY(parentId) REFERENCES test_table(id) DEFERRABLE INITIALLY DEFERRED\n)"

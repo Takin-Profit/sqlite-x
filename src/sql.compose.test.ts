@@ -112,7 +112,7 @@ test("maintains parameter references through concatenation", () => {
 })
 
 test("builds complex SELECT with context columns", () => {
-	let query = db.sql`SELECT ${{ cols: ["users.id", "users.name", "users.metadata<-json"] }} FROM users`
+	let query = db.sql`SELECT ${{ columns: ["users.id", "users.name", "users.metadata<-json"] }} FROM users`
 	query = query.sql`INNER JOIN posts ON user_id = users.id`
 	query = query.sql`${
 		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
@@ -134,10 +134,10 @@ test("builds complex SELECT with context columns", () => {
 
 test("builds CTE with complex SELECT", () => {
 	let query = db.sql`WITH filtered_users AS (`
-	query = query.sql`SELECT ${{ cols: ["id", "name", "metadata<-json"] }}`
+	query = query.sql`SELECT ${{ columns: ["id", "name", "metadata<-json"] }}`
 	query = query.sql`FROM users`
 	query = query.sql`${{ where: "age > $minAge", limit: 100 }})`
-	query = query.sql`SELECT ${{ cols: ["id", "name"] }} FROM filtered_users`
+	query = query.sql`SELECT ${{ columns: ["id", "name"] }} FROM filtered_users`
 	query = query.sql`${{ orderBy: { name: "ASC" } }}`
 
 	assert.equal(
@@ -169,7 +169,7 @@ test("builds UPDATE with column list", () => {
 
 test("builds complex INSERT with subselect and CTE", () => {
 	let query = db.sql`WITH active_users AS (`
-	query = query.sql`SELECT ${{ cols: ["id", "metadata<-json"] }}`
+	query = query.sql`SELECT ${{ columns: ["id", "metadata<-json"] }}`
 	query = query.sql`FROM users`
 	query = query.sql`${{ where: "active = $active" }})`
 	query = query.sql`INSERT INTO posts (user_id, metadata)`

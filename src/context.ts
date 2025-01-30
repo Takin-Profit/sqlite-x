@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-import { validateColumns, type Columns } from "#columns.js"
+import { validateSchema, type Schema } from "#schema.js"
 import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors"
 import type { ToJson, ParameterOperator, FromJson } from "#sql"
 import type { DataRow } from "#types"
@@ -28,7 +28,7 @@ export type ColsOptions<P extends DataRow> =
 
 // Core SQL context type
 export type SqlContext<P extends DataRow, R = P> = Partial<{
-	cols: ColsOptions<P>
+	columns: ColsOptions<P>
 	values: InsertOptions<P>
 	set: SetOptions<P>
 	where: WhereClause<P>
@@ -36,7 +36,7 @@ export type SqlContext<P extends DataRow, R = P> = Partial<{
 	limit: number
 	offset: number
 	returning: (keyof R)[] | "*" | ["*", { jsonColumns?: (keyof R)[] }]
-	columns: Columns<P>
+	schema: Schema<P>
 }>
 
 export function validateSqlContext<P extends DataRow, R = P>(
@@ -65,21 +65,21 @@ export function validateSqlContext<P extends DataRow, R = P>(
 				}
 				break
 			}
-			case "cols": {
+			case "columns": {
 				const value = context[key]
 				if (value !== "*" && !Array.isArray(value)) {
 					errors.push(
 						validationErr({
-							msg: "cols must be '*' or an array",
-							path: "cols",
+							msg: "columns must be '*' or an array",
+							path: "columns",
 						})
 					)
 				} else if (Array.isArray(value)) {
 					if (!value.every(item => typeof item === "string")) {
 						errors.push(
 							validationErr({
-								msg: "cols array must contain only strings",
-								path: "cols",
+								msg: "columns array must contain only strings",
+								path: "columns",
 							})
 						)
 					}
@@ -89,7 +89,7 @@ export function validateSqlContext<P extends DataRow, R = P>(
 							errors.push(
 								validationErr({
 									msg: "Invalid column format",
-									path: `cols[${index}]`,
+									path: `columns[${index}]`,
 								})
 							)
 						}
@@ -137,13 +137,13 @@ export function validateSqlContext<P extends DataRow, R = P>(
 					)
 				}
 				break
-			case "columns": {
-				const columnErrors = validateColumns<P>(context[key])
+			case "schema": {
+				const columnErrors = validateSchema<P>(context[key])
 				if (columnErrors.length > 0) {
 					errors.push(
 						...columnErrors.map(err => ({
 							...err,
-							path: `columns${err.path ? `.${err.path}` : ""}`,
+							path: `schema${err.path ? `.${err.path}` : ""}`,
 						}))
 					)
 				}

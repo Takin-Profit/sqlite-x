@@ -5,7 +5,7 @@
 // columns.test.ts
 import { test, describe, beforeEach, afterEach } from "node:test"
 import assert from "node:assert/strict"
-import { validateColumns, type Columns, buildColumnsStatement } from "./columns"
+import { validateSchema, type Schema, buildSchema } from "./schema"
 import { NodeSqliteError } from "#errors"
 import { DB } from "#database"
 
@@ -25,7 +25,7 @@ describe("Column Validation", () => {
 			active: "INTEGER",
 			metadata: "BLOB",
 		}
-		const errors = validateColumns<TestUser>(columns)
+		const errors = validateSchema<TestUser>(columns)
 		assert.equal(errors.length, 0)
 	})
 
@@ -35,7 +35,7 @@ describe("Column Validation", () => {
 			name: "TEXT NOT NULL UNIQUE",
 			status: "INTEGER DEFAULT 1",
 		}
-		const errors = validateColumns<TestUser>(columns)
+		const errors = validateSchema<TestUser>(columns)
 		assert.equal(errors.length, 0)
 	})
 
@@ -44,7 +44,7 @@ describe("Column Validation", () => {
 			id: "INVALID",
 			name: "STRING",
 		}
-		const errors = validateColumns<TestUser>(columns)
+		const errors = validateSchema<TestUser>(columns)
 		assert.equal(errors.length, 2)
 	})
 
@@ -53,7 +53,7 @@ describe("Column Validation", () => {
 			id: "PRIMARY KEY",
 			name: "NOT NULL",
 		}
-		const errors = validateColumns<TestUser>(columns)
+		const errors = validateSchema<TestUser>(columns)
 		assert.equal(errors.length, 2)
 	})
 })
@@ -66,14 +66,14 @@ test("buildColumnsStatement generates correct SQL DDL", () => {
 		metadata: object
 	}
 
-	const columns: Columns<TestTable> = {
+	const columns: Schema<TestTable> = {
 		id: "INTEGER PRIMARY KEY AUTOINCREMENT",
 		name: "TEXT NOT NULL",
 		active: "INTEGER DEFAULT 1",
 		metadata: "BLOB",
 	}
 
-	const sql = buildColumnsStatement(columns)
+	const sql = buildSchema(columns)
 	assert.equal(
 		sql,
 		"(\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  name TEXT NOT NULL,\n  active INTEGER DEFAULT 1,\n  metadata BLOB\n)"
@@ -87,13 +87,13 @@ test("buildColumnsStatement handles complex constraints", () => {
 		code: string
 	}
 
-	const columns: Columns<ComplexTable> = {
+	const columns: Schema<ComplexTable> = {
 		id: "INTEGER PRIMARY KEY CHECK (id > 0) NOT NULL",
 		ref: "INTEGER FOREIGN KEY REFERENCES users (id)",
 		code: "TEXT UNIQUE DEFAULT 'none'",
 	}
 
-	const sql = buildColumnsStatement(columns)
+	const sql = buildSchema(columns)
 	assert.equal(
 		sql,
 		"(\n  id INTEGER PRIMARY KEY CHECK (id > 0) NOT NULL,\n  ref INTEGER FOREIGN KEY REFERENCES users (id),\n  code TEXT UNIQUE DEFAULT 'none'\n)"
@@ -108,7 +108,7 @@ test("buildColumnsStatement throws on invalid definitions", () => {
 
 	assert.throws(
 		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-		() => buildColumnsStatement(invalidColumns as any),
+		() => buildSchema(invalidColumns as any),
 		NodeSqliteError
 	)
 })
@@ -136,7 +136,7 @@ describe("Columns Context SQL Generation", () => {
 
 		const stmt = db.sql<TestTable>`
       CREATE TABLE test_table ${{
-				columns: {
+				schema: {
 					id: "INTEGER PRIMARY KEY AUTOINCREMENT",
 					name: "TEXT NOT NULL",
 					active: "INTEGER DEFAULT 1",

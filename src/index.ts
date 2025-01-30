@@ -61,12 +61,12 @@ export type {
 export type { SqlContext } from "#context"
 
 export type {
-	Columns,
+	Schema as Columns,
 	ValidColumnTypeMap,
 	ConstraintPatterns,
 	DataType,
 	BaseConstraint,
-} from "#columns"
+} from "#schema"
 
 export { DB } from "#database"
 

@@ -68,13 +68,13 @@ export type ValidColumnTypeMap<T> = T extends string
  * Type-safe column definitions for a table
  * @template T Table row type
  */
-export type Columns<T extends DataRow> = {
+export type Schema<T extends DataRow> = {
 	[K in keyof T]?: ValidColumnTypeMap<T[K]>
 } & { $$foreignKeys?: ForeignKeyDef<T>[] }
 
 const columnRegex = /^(TEXT|INTEGER|REAL|BLOB)(\s+.+)?$/
 
-export function validateColumns<T extends DataRow>(
+export function validateSchema<T extends DataRow>(
 	value: unknown
 ): ValidationError[] {
 	if (!value || typeof value !== "object") {
@@ -135,16 +135,14 @@ export function validateColumns<T extends DataRow>(
 	return errors
 }
 
-export function isValidColumns<T extends DataRow>(
+export function isValidSchema<T extends DataRow>(
 	value: unknown
-): value is Columns<T> {
-	return validateColumns<T>(value).length === 0
+): value is Schema<T> {
+	return validateSchema<T>(value).length === 0
 }
 
-export function buildColumnsStatement<T extends DataRow>(
-	columns: Columns<T>
-): string {
-	const errors = validateColumns<T>(columns)
+export function buildSchema<T extends DataRow>(columns: Schema<T>): string {
+	const errors = validateSchema<T>(columns)
 	if (errors.length > 0) {
 		throw new NodeSqliteError(
 			"ERR_SQLITE_COLUMNS",

@@ -28,7 +28,7 @@ import { isRawValue, type DataRow, type RawValue } from "#types"
 import { buildWhereStatement } from "#where.js"
 import sqlFormatter from "@sqltools/formatter"
 import { buildOrderByStatement } from "#order-by"
-import { buildColumnsStatement } from "#columns"
+import { buildSchema } from "#schema"
 import type { Config } from "@sqltools/formatter/lib/core/types"
 import stringify from "#stringify"
 
@@ -181,12 +181,12 @@ export class Sql<P extends DataRow, RET = P> {
 	#contextToSql(context: SqlContext<P, RET>): string {
 		const parts: string[] = []
 
-		if (context.cols) {
-			parts.push(buildColsStatement(context.cols))
+		if (context.columns) {
+			parts.push(buildColsStatement(context.columns))
 		}
 
-		if (context.columns) {
-			parts.push(buildColumnsStatement(context.columns))
+		if (context.schema) {
+			parts.push(buildSchema(context.schema))
 			parts[parts.length - 1] += ";" // Add semicolon after table creation
 		}
 

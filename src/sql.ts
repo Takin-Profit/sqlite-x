@@ -10,6 +10,7 @@
 
 import {
 	buildColsStatement,
+	isJsonColumns,
 	isSqlContext,
 	type SqlContext,
 	validateContextCombination,
@@ -222,11 +223,28 @@ export class Sql<P extends DataRow> {
 		}
 
 		if (context.returning) {
-			parts.push(
-				context.returning === "*"
-					? "RETURNING *"
-					: `RETURNING ${context.returning.join(", ")}`
-			)
+			if (context.returning === "*") {
+				parts.push("RETURNING *")
+			} else if (Array.isArray(context.returning)) {
+				if (
+					context.returning.length === 2 &&
+					context.returning[0] === "*" &&
+					isJsonColumns(context.returning[1])
+				) {
+					// Handle JSON columns case
+					const config = context.returning[1]
+					const jsonColumns = new Set(config.jsonColumns || [])
+					const allColumns = new Set(Object.keys(this.#params))
+
+					const returningColumns = Array.from(allColumns).map(col =>
+						jsonColumns.has(col) ? `json_extract(${col}, '$') as ${col}` : col
+					)
+					parts.push(`RETURNING ${returningColumns.join(", ")}`)
+				} else {
+					// Handle regular column array case
+					parts.push(`RETURNING ${context.returning.join(", ")}`)
+				}
+			}
 		}
 
 		return parts.join("\n")

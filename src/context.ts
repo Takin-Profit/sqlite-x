@@ -30,7 +30,7 @@ export type SqlContext<P extends DataRow> = Partial<{
 	orderBy: Partial<Record<keyof P, "ASC" | "DESC">>
 	limit: number
 	offset: number
-	returning: (keyof P)[] | "*"
+	returning: (keyof P)[] | "*" | ["*", { jsonColumns?: (keyof P)[] }]
 	columns: Columns<P>
 }>
 
@@ -155,31 +155,44 @@ export function validateSqlContext<P extends DataRow>(
 						})
 					)
 				} else if (Array.isArray(value)) {
-					// Check for non-strings
-					if (!value.every(item => typeof item === "string")) {
-						errors.push(
-							validationErr({
-								msg: "returning array must contain only strings",
-								path: "returning",
-							})
-						)
-					}
-					// Check for duplicates
-					const seen = new Set<string>()
-					const duplicates = value.filter(item => {
-						if (seen.has(item)) {
-							return true
+					// Check for ["*", { jsonColumns: [...] }] format
+					if (value.length === 2 && value[0] === "*") {
+						const config = value[1]
+						if (!isJsonColumns(config)) {
+							errors.push(
+								validationErr({
+									msg: "jsonColumns must be a non-empty array of strings",
+									path: "returning[1]",
+								})
+							)
 						}
-						seen.add(item)
-						return false
-					})
-					if (duplicates.length > 0) {
-						errors.push(
-							validationErr({
-								msg: `Duplicate columns in RETURNING clause: ${duplicates.join(", ")}`,
-								path: "returning",
-							})
-						)
+					} else {
+						// Regular column array validation
+						if (!value.every(item => typeof item === "string")) {
+							errors.push(
+								validationErr({
+									msg: "returning array must contain only strings",
+									path: "returning",
+								})
+							)
+						}
+						// Check for duplicates
+						const seen = new Set<string>()
+						const duplicates = value.filter(item => {
+							if (seen.has(item)) {
+								return true
+							}
+							seen.add(item)
+							return false
+						})
+						if (duplicates.length > 0) {
+							errors.push(
+								validationErr({
+									msg: `Duplicate columns in RETURNING clause: ${duplicates.join(", ")}`,
+									path: "returning",
+								})
+							)
+						}
 					}
 				}
 				break
@@ -500,3 +513,14 @@ export function buildColsStatement<P extends DataRow>(
 
 	return columnsList.join(", ") // Remove "SELECT" prefix
 }
+
+export const isJsonColumns = (
+	value: unknown
+): value is { jsonColumns: string[] } =>
+	typeof value === "object" &&
+	value !== null &&
+	Array.isArray((value as { jsonColumns: unknown }).jsonColumns) &&
+	(value as { jsonColumns: unknown[] }).jsonColumns.length > 0 &&
+	(value as { jsonColumns: unknown[] }).jsonColumns.every(
+		col => typeof col === "string"
+	)

@@ -643,3 +643,92 @@ test("generator handles error recovery and cleanup", () => {
 	}
 	assert.equal(count, 5)
 })
+
+test("handles JSON columns in RETURNING clause", () => {
+	type TestData = {
+		id?: number
+		name: string
+		metadata: { tags: string[] }
+		settings: { theme: string }
+	}
+
+	const stmt = db.sql<TestData>`
+    INSERT INTO test_table ${{
+			values: ["$name", "$metadata->json", "$settings->json"],
+			returning: ["*", { jsonColumns: ["metadata", "settings"] }],
+		}}
+  `
+
+	assert.equal(
+		stmt
+			.sourceSQL({
+				name: "test",
+				metadata: { tags: ["a", "b"] },
+				settings: { theme: "dark" },
+			})
+			.trim(),
+		`INSERT INTO test_table (name, metadata, settings)\nVALUES ($name, jsonb($metadata), jsonb($settings))\nRETURNING name,\n  json_extract(metadata, '$') AS metadata,\n  json_extract(settings, '$') AS settings`
+	)
+})
+
+test("handles mixed standard and JSON columns in RETURNING clause", () => {
+	type TestData = {
+		id: number
+		name: string
+		metadata: { tags: string[] }
+	}
+
+	const stmt = db.sql<TestData>`
+    UPDATE test_table ${{
+			set: ["$name", "$metadata->json"],
+			where: "id = $id",
+			returning: ["*", { jsonColumns: ["metadata"] }],
+		}}
+  `
+
+	assert.equal(
+		stmt
+			.sourceSQL({
+				id: 1,
+				name: "test",
+				metadata: { tags: ["a", "b"] },
+			})
+			.trim(),
+		"UPDATE test_table\nSET name = $name,\n  metadata = jsonb($metadata)\nWHERE id = $id\nRETURNING id,\n  name,\n  json_extract(metadata, '$') AS metadata"
+	)
+})
+
+test("validates JSON columns configuration", () => {
+	type TestData = {
+		id: number
+		metadata: { tags: string[] }
+	}
+
+	// Invalid jsonColumns type
+	assert.throws(
+		() => {
+			db.sql<TestData>`
+        INSERT INTO test_table ${{
+					values: ["$metadata->json"],
+					// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+					returning: ["*", { jsonColumns: "not-an-array" }] as any,
+				}}
+      `.get({ id: 0, metadata: { tags: [] } })
+		},
+		{ name: "NodeSqliteError" }
+	)
+
+	// Invalid column names
+	assert.throws(
+		() => {
+			db.sql<TestData>`
+        INSERT INTO test_table ${{
+					values: ["$metadata->json"],
+					// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+					returning: ["*", { jsonColumns: [42] }] as any,
+				}}
+      `.get({ id: 0, metadata: { tags: [] } })
+		},
+		{ name: "NodeSqliteError" }
+	)
+})

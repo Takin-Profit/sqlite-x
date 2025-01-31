@@ -84,7 +84,10 @@ describe("SQL Context Generation", () => {
 		const stmt = db.sql<UpdateRow>`
    UPDATE test_table
    ${{
-			set: ["$name", "$metadata->json"],
+			set: {
+				name: "$name",
+				metadata: "$metadata->json",
+			},
 			where: "id = $id",
 			returning: "*",
 		}}
@@ -680,7 +683,10 @@ test("handles mixed standard and JSON columns in RETURNING clause", () => {
 
 	const stmt = db.sql<TestData>`
     UPDATE test_table ${{
-			set: ["$name", "$metadata->json"],
+			set: {
+				name: "$name",
+				metadata: "$metadata->json",
+			},
 			where: "id = $id",
 			returning: ["*", { jsonColumns: ["metadata"] }],
 		}}

@@ -5,16 +5,16 @@
 import { validateSchema, type Schema } from "#schema.js"
 import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors"
 import type { ToJson, ParameterOperator, FromJson } from "#sql"
-import type { DataRow } from "#types"
+import { isRawValue, type DataRow, type RawValue } from "#types"
 import { validationErr, type ValidationError } from "#validate"
 import { validateWhereClause, type WhereClause } from "#where"
 
 export type ValueType<P extends DataRow> = ParameterOperator<P> | ToJson<P>
 
 export type SetOptions<P extends DataRow> =
-	| ValueType<P>[]
-	| "*"
+	| { [K in keyof P]?: ValueType<P> | RawValue }
 	| ["*", { jsonColumns: (keyof P)[] }]
+	| "*"
 
 export type InsertOptions<P extends DataRow> =
 	| ValueType<P>[]
@@ -52,14 +52,25 @@ export function validateSqlContext<P extends DataRow, R = P>(
 
 	for (const key in context) {
 		switch (key) {
-			case "values":
-			case "set": {
+			case "values": {
 				const valueErrors = validateInsertOrSetOptions<P>(context[key])
 				if (valueErrors.length > 0) {
 					errors.push(
 						...valueErrors.map(err => ({
 							...err,
-							path: `${key}${err.path ? `.${err.path}` : ""}`,
+							path: `values${err.path ? `.${err.path}` : ""}`,
+						}))
+					)
+				}
+				break
+			}
+			case "set": {
+				const setErrors = validateSetOptions<P>(context[key])
+				if (setErrors.length > 0) {
+					errors.push(
+						...setErrors.map(err => ({
+							...err,
+							path: `set${err.path ? `.${err.path}` : ""}`,
 						}))
 					)
 				}
@@ -582,6 +593,125 @@ export function buildColsStatement<P extends DataRow>(
 		"Columns must be '*', an array of columns, or ['*', { jsonColumns: [...] }]",
 		undefined
 	)
+}
+
+export function validateSetOptions<P extends DataRow>(
+	value: unknown
+): ValidationError[] {
+	const errors: ValidationError[] = []
+
+	// Handle "*" case
+	if (value === "*") {
+		return []
+	}
+
+	// Handle ["*", { jsonColumns: [...] }] case
+	if (Array.isArray(value)) {
+		if (value.length !== 2 || value[0] !== "*") {
+			return [
+				validationErr({
+					msg: "Array format must be ['*', { jsonColumns: [...] }]",
+					path: "",
+				}),
+			]
+		}
+
+		const [, config] = value
+		if (!config || typeof config !== "object" || !("jsonColumns" in config)) {
+			return [
+				validationErr({
+					msg: "Second element must be an object with jsonColumns",
+					path: "[1]",
+				}),
+			]
+		}
+
+		const { jsonColumns } = config
+		if (!Array.isArray(jsonColumns) || jsonColumns.length === 0) {
+			return [
+				validationErr({
+					msg: "jsonColumns must be a non-empty array",
+					path: "[1].jsonColumns",
+				}),
+			]
+		}
+
+		if (!jsonColumns.every(col => typeof col === "string")) {
+			return [
+				validationErr({
+					msg: "jsonColumns must contain only strings",
+					path: "[1].jsonColumns",
+				}),
+			]
+		}
+
+		return []
+	}
+
+	// Handle object format
+	if (typeof value === "object" && value !== null) {
+		const entries = Object.entries(value)
+
+		for (const [key, val] of entries) {
+			if (isRawValue(val)) {
+				// RawValue is always valid
+				continue
+			}
+
+			if (typeof val !== "string") {
+				errors.push(
+					validationErr({
+						msg: `Value for '${key}' must be a string parameter or RawValue`,
+						path: key,
+					})
+				)
+				continue
+			}
+
+			// Validate parameter format
+			if (val.startsWith("$")) {
+				// Check for ->json format
+				if (val.endsWith("->json")) {
+					const paramPart = val.slice(1, -6)
+					if (!paramPart) {
+						errors.push(
+							validationErr({
+								msg: "Invalid JSON parameter format",
+								path: key,
+							})
+						)
+					}
+				} else {
+					// Regular parameter
+					const paramPart = val.slice(1)
+					if (!paramPart) {
+						errors.push(
+							validationErr({
+								msg: "Invalid parameter format",
+								path: key,
+							})
+						)
+					}
+				}
+			} else {
+				errors.push(
+					validationErr({
+						msg: "Value must start with $ or be a RawValue",
+						path: key,
+					})
+				)
+			}
+		}
+
+		return errors
+	}
+
+	return [
+		validationErr({
+			msg: "SET must be an object, '*', or ['*', { jsonColumns: [...] }]",
+			path: "",
+		}),
+	]
 }
 
 export const isJsonColumns = (

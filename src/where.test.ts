@@ -156,13 +156,13 @@ describe("buildWhereStatement", () => {
 		]
 
 		for (const condition of conditions) {
-			const sql = buildWhereStatement(condition)
-			assert.equal(sql, `WHERE ${condition}`)
+			const result = buildWhereStatement(condition)
+			assert.equal(result.sql, `WHERE ${condition}`)
 		}
 	})
 
 	test("builds compound conditions with AND", () => {
-		const sql = buildWhereStatement([
+		const result = buildWhereStatement([
 			"id > $min_id",
 			"AND",
 			"id < $max_id",
@@ -170,13 +170,13 @@ describe("buildWhereStatement", () => {
 			"active = $active",
 		])
 		assert.equal(
-			sql,
+			result.sql,
 			"WHERE id > $min_id AND id < $max_id AND active = $active"
 		)
 	})
 
 	test("builds compound conditions with OR", () => {
-		const sql = buildWhereStatement([
+		const result = buildWhereStatement([
 			"name LIKE $pattern1",
 			"OR",
 			"name LIKE $pattern2",
@@ -184,13 +184,13 @@ describe("buildWhereStatement", () => {
 			"email LIKE $pattern3",
 		])
 		assert.equal(
-			sql,
+			result.sql,
 			"WHERE name LIKE $pattern1 OR name LIKE $pattern2 OR email LIKE $pattern3"
 		)
 	})
 
 	test("builds mixed AND/OR conditions", () => {
-		const sql = buildWhereStatement([
+		const result = buildWhereStatement([
 			"active = $active",
 			"AND",
 			"age > $min_age",
@@ -198,13 +198,13 @@ describe("buildWhereStatement", () => {
 			"name LIKE $pattern",
 		])
 		assert.equal(
-			sql,
+			result.sql,
 			"WHERE active = $active AND age > $min_age OR name LIKE $pattern"
 		)
 	})
 
 	test("builds complex nested conditions", () => {
-		const sql = buildWhereStatement([
+		const result = buildWhereStatement([
 			"id > $min_id",
 			"AND",
 			"id < $max_id",
@@ -216,13 +216,13 @@ describe("buildWhereStatement", () => {
 			"created_at < $date",
 		])
 		assert.equal(
-			sql,
+			result.sql,
 			"WHERE id > $min_id AND id < $max_id AND active = $active OR metadata IS NULL AND created_at < $date"
 		)
 	})
 
 	test("handles null checks with other conditions", () => {
-		const sql = buildWhereStatement([
+		const result = buildWhereStatement([
 			"metadata IS NULL",
 			"OR",
 			"metadata IS NOT NULL",
@@ -230,24 +230,27 @@ describe("buildWhereStatement", () => {
 			"active = $active",
 		])
 		assert.equal(
-			sql,
+			result.sql,
 			"WHERE metadata IS NULL OR metadata IS NOT NULL AND active = $active"
 		)
 	})
 
 	test("handles multiple IN conditions", () => {
-		const sql = buildWhereStatement([
+		const result = buildWhereStatement([
 			"id IN $ids",
 			"AND",
 			"age IN $ages",
 			"OR",
 			"name NOT IN $names",
 		])
-		assert.equal(sql, "WHERE id IN $ids AND age IN $ages OR name NOT IN $names")
+		assert.equal(
+			result.sql,
+			"WHERE id IN $ids AND age IN $ages OR name NOT IN $names"
+		)
 	})
 
 	test("handles LIKE conditions with mixed operators", () => {
-		const sql = buildWhereStatement([
+		const result = buildWhereStatement([
 			"name LIKE $pattern",
 			"AND",
 			"email NOT LIKE $pattern",
@@ -257,13 +260,13 @@ describe("buildWhereStatement", () => {
 			"active = $active",
 		])
 		assert.equal(
-			sql,
+			result.sql,
 			"WHERE name LIKE $pattern AND email NOT LIKE $pattern OR age > $min_age AND active = $active"
 		)
 	})
 
 	test("handles maximum supported condition length", () => {
-		const sql = buildWhereStatement([
+		const result = buildWhereStatement([
 			"id = $id1",
 			"AND",
 			"id = $id2",
@@ -285,7 +288,7 @@ describe("buildWhereStatement", () => {
 			"id = $id10",
 		])
 		assert.equal(
-			sql,
+			result.sql,
 			"WHERE id = $id1 AND id = $id2 AND id = $id3 AND id = $id4 AND id = $id5 AND id = $id6 AND id = $id7 AND id = $id8 AND id = $id9 AND id = $id10"
 		)
 	})

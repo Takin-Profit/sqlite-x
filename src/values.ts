@@ -220,19 +220,3 @@ export function buildValuesStatement<P extends DataRow>(
 		parameterOperators: result.parameterOperators,
 	}
 }
-
-export function buildSetStatement<P extends DataRow>(
-	set: InsertOptions<P>,
-	params: P
-): { sql: string; parameterOperators: string[] } {
-	const { columns, placeholders, parameterOperators } = buildSqlComponents(
-		set,
-		params
-	)
-	const setPairs = columns.map((col, i) => `${col} = ${placeholders[i]}`)
-
-	return {
-		sql: `SET ${setPairs.join(", ")}`,
-		parameterOperators,
-	}
-}

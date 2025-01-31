@@ -17,7 +17,7 @@ import {
 	validateSqlContext,
 } from "#context"
 import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors"
-import { buildSetStatement, buildValuesStatement } from "#values"
+import { buildValuesStatement } from "#values"
 import type { Primitive } from "type-fest"
 import type {
 	StatementResultingChanges,
@@ -31,6 +31,7 @@ import { buildOrderByStatement } from "#order-by"
 import { buildSchema } from "#schema"
 import type { Config } from "@sqltools/formatter/lib/core/types"
 import stringify from "#stringify"
+import { buildSetStatement } from "#set.js"
 
 /**
  * Represents a parameter operator that references a property of type P
@@ -72,6 +73,9 @@ function toSupportedValue(value: unknown): SupportedValueType {
 		value instanceof Uint8Array
 	) {
 		return value as SupportedValueType
+	}
+	if (typeof value === "object") {
+		return stringify(value) // Use stringify for objects
 	}
 	return String(value)
 }
@@ -203,11 +207,20 @@ export class Sql<P extends DataRow, RET = P> {
 			for (const op of result.parameterOperators) {
 				this.#contextOperators.add(op)
 			}
-			parts.push(result.sql)
+			const setParts = result.sql.split("\n")
+			if (setParts.length > 1) {
+				parts.push(setParts[0])
+				parts.push(...setParts.slice(1).map(p => `  ${p}`))
+			} else {
+				parts.push(result.sql)
+			}
 		}
-
 		if (context.where) {
-			parts.push(buildWhereStatement(context.where))
+			const result = buildWhereStatement(context.where, this.#params)
+			parts.push(result.sql)
+			for (const op of result.parameterOperators) {
+				this.#contextOperators.add(op)
+			}
 		}
 
 		if (context.orderBy) {

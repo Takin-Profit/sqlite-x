@@ -233,26 +233,40 @@ function validateSingleCondition<P extends DataRow>(
 	return []
 }
 
-export function buildWhereStatement(where: WhereClause<DataRow>): string {
+export function buildWhereStatement<P extends DataRow>(
+	where: WhereClause<P>,
+	params?: P
+): { sql: string; parameterOperators: string[] } {
+	const paramOps: string[] = []
+
 	if (typeof where === "string") {
-		if (where.includes("->json")) {
-			const [field, op, param] = where.trim().split(/\s+/)
-			const value = param.split("->")[0]
-			return `WHERE ${field} ${op} jsonb(${value})`
+		// Extract parameter names from where clause
+		const matches = where.match(/\$\w+/g) || []
+		paramOps.push(...matches)
+		return {
+			sql: `WHERE ${where}`,
+			parameterOperators: paramOps,
 		}
-		return `WHERE ${where}`
 	}
 
+	// Handle array case...
 	const conditions = where
 		.map((part, i) => {
-			if (i % 2 === 0 && part.includes("->json")) {
-				const [field, op, param] = part.trim().split(/\s+/)
-				const value = param.split("->")[0]
-				return `${field} ${op} jsonb(${value})`
+			if (i % 2 === 0) {
+				const matches = part.match(/\$\w+/g) || []
+				paramOps.push(...matches)
+				// Handle JSON operator
+				if (part.includes("->json")) {
+					return part.replace(/\$([\w]+)->json/, "jsonb($$$1)")
+				}
+				return part
 			}
-			return i % 2 === 0 ? part : ` ${part} `
+			return ` ${part} `
 		})
 		.join("")
 
-	return `WHERE ${conditions}`
+	return {
+		sql: `WHERE ${conditions}`,
+		parameterOperators: paramOps,
+	}
 }

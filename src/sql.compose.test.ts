@@ -149,7 +149,11 @@ test("builds CTE with complex SELECT", () => {
 test("builds UPDATE with column list", () => {
 	let query = db.sql`UPDATE users`
 	query = query.sql`${{
-		set: ["$name", "$email", "$metadata->json"],
+		set: {
+			name: "$name",
+			email: "$email",
+			metadata: "$metadata->json",
+		},
 		where: "id = $id",
 		returning: ["id", "email"],
 	}}`

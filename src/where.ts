@@ -1,24 +1,19 @@
 import {
 	COMPARISON_OPERATORS,
 	LOGICAL_OPERATORS,
+	type RawValue,
 	type ComparisonOperator,
 	type DataRow,
 	type LogicalOperator,
+	isRawValue,
 } from "#types"
 import { validationErr, type ValidationError } from "#validate.js"
 
-// fields of boolean type should be comparable to other boolean fields, and number fields
-// fields of number type should be comparable to other number fields, and boolean fields
-// string fields should be comparable to other string fields, and boolean fields
-// object fields, arrays, sets, and anything that is not a primitive type should be comparable to other object fields, and arrays and non primitive types
-// more that 5 elements are allowed in the tuple, there is no limit
-
-// Single condition type
 type SingleWhereCondition<P extends DataRow> =
 	| `${keyof P & string} ${ComparisonOperator} $${keyof P & string}`
 	| `${keyof P & string} IS NULL`
 	| `${keyof P & string} IS NOT NULL`
-
+	| [keyof P & string, ComparisonOperator, RawValue] // New tuple format for RawValue
 // Recursive type to enforce alternating condition/operator pattern
 type ExtendedWhereCondition<P extends DataRow> =
 	| [SingleWhereCondition<P>, LogicalOperator, SingleWhereCondition<P>]
@@ -181,11 +176,37 @@ export function validateWhereClause<P extends DataRow>(
 		return validateSingleCondition(where)
 	}
 
-	if (!Array.isArray(where)) {
-		return [validationErr({ msg: "Where clause must be a string or array" })]
+	// Handle tuple format for RawValue
+	if (
+		Array.isArray(where) &&
+		where.length === 3 &&
+		!LOGICAL_OPERATORS.includes(where[1] as (typeof LOGICAL_OPERATORS)[number])
+	) {
+		const [column, operator, value] = where
+		if (
+			typeof column !== "string" ||
+			!COMPARISON_OPERATORS.includes(operator as ComparisonOperator) ||
+			!isRawValue(value)
+		) {
+			return [
+				validationErr({
+					msg: "Invalid RawValue condition format",
+					path: "",
+				}),
+			]
+		}
+		return []
 	}
 
-	// Check for minimum length and odd number of elements
+	if (!Array.isArray(where)) {
+		return [
+			validationErr({
+				msg: "Where clause must be a string, array, or RawValue condition",
+			}),
+		]
+	}
+
+	// Check for minimum length and odd number of elements for logical combinations
 	if (where.length < 3 || where.length % 2 === 0) {
 		return [
 			validationErr({
@@ -198,8 +219,21 @@ export function validateWhereClause<P extends DataRow>(
 	for (let i = 0; i < where.length; i++) {
 		if (i % 2 === 0) {
 			// Should be condition
-			const conditionErrors = validateSingleCondition(where[i])
-			errors.push(...conditionErrors)
+			if (Array.isArray(where[i])) {
+				// Handle RawValue condition
+				const condition = where[i] as [string, ComparisonOperator, RawValue]
+				if (condition.length !== 3 || !isRawValue(condition[2])) {
+					errors.push(
+						validationErr({
+							msg: `Invalid RawValue condition at position ${i}`,
+							path: `[${i}]`,
+						})
+					)
+				}
+			} else {
+				const conditionErrors = validateSingleCondition(where[i] as string)
+				errors.push(...conditionErrors)
+			}
 		} else if (!LOGICAL_OPERATORS.includes(where[i] as LogicalOperator)) {
 			errors.push(
 				validationErr({
@@ -213,7 +247,6 @@ export function validateWhereClause<P extends DataRow>(
 	return errors
 }
 
-// In validateSingleCondition
 function validateSingleCondition<P extends DataRow>(
 	condition: string
 ): ValidationError[] {
@@ -249,15 +282,33 @@ export function buildWhereStatement<P extends DataRow>(
 		}
 	}
 
-	// Handle array case...
+	// Handle RawValue tuple format
+	if (
+		Array.isArray(where) &&
+		where.length === 3 &&
+		!LOGICAL_OPERATORS.includes(where[1] as (typeof LOGICAL_OPERATORS)[number])
+	) {
+		const [column, operator, value] = where
+		return {
+			sql: `WHERE ${column} ${operator} ${(value as RawValue).value}`,
+			parameterOperators: [],
+		}
+	}
+
+	// Handle array case
 	const conditions = where
 		.map((part, i) => {
 			if (i % 2 === 0) {
-				const matches = part.match(/\$\w+/g) || []
+				if (Array.isArray(part)) {
+					// Handle RawValue condition
+					const [column, operator, value] = part
+					return `${column} ${operator} ${value.value}`
+				}
+				const matches = (part as string).match(/\$\w+/g) || []
 				paramOps.push(...matches)
 				// Handle JSON operator
-				if (part.includes("->json")) {
-					return part.replace(/\$([\w]+)->json/, "jsonb($$$1)")
+				if ((part as string).includes("->json")) {
+					return (part as string).replace(/\$([\w]+)->json/, "jsonb($$$1)")
 				}
 				return part
 			}

@@ -10,6 +10,7 @@ import {
 	type WhereClause,
 } from "#where"
 import { DB } from "#database"
+import { raw } from "#sql.js"
 
 interface TestUser {
 	id: number
@@ -413,6 +414,121 @@ describe("Where Context SQL Generation", () => {
 				})
 				.trim(),
 			"SELECT *\nFROM test_data\nWHERE age > $min_age\n  AND settings = jsonb($settings)"
+		)
+	})
+
+	test("validates raw value conditions", () => {
+		const validCases: WhereClause<TestUser>[] = [
+			["id", "=", raw`(SELECT max_id FROM config)`],
+			// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+			["created_at", ">", raw`CURRENT_TIMESTAMP`] as any,
+			["updated_at", "<", raw`datetime('now', '-7 days')`],
+		]
+
+		for (const condition of validCases) {
+			const errors = validateWhereClause(condition)
+			assert.equal(
+				errors.length,
+				0,
+				`Expected no errors for: ${JSON.stringify(condition)}`
+			)
+		}
+	})
+
+	test("validates raw values in compound conditions", () => {
+		const validCases: WhereClause<TestUser>[] = [
+			[
+				["id", ">", raw`(SELECT min_id FROM ranges)`],
+				"AND",
+				"active = $active",
+			],
+			["name LIKE $pattern", "OR", ["created_at", ">", raw`CURRENT_TIMESTAMP`]],
+			[
+				["id", "=", raw`(SELECT ref_id FROM related)`],
+				"AND",
+				"metadata IS NOT NULL",
+				"OR",
+				["updated_at", "<", raw`datetime('now', '-1 hour')`],
+			],
+			// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+		] as any
+
+		for (const condition of validCases) {
+			const errors = validateWhereClause(condition)
+			assert.equal(
+				errors.length,
+				0,
+				`Expected no errors for: ${JSON.stringify(condition)}`
+			)
+		}
+	})
+
+	test("rejects invalid raw value conditions", () => {
+		const invalidCases = [
+			["id", "INVALID", raw`something`], // Invalid operator
+			["id", "=", "not a raw value"], // Missing raw value
+			["id", "="], // Missing raw value
+			[123, "=", raw`value`], // Invalid column name
+		]
+
+		for (const condition of invalidCases) {
+			const errors = validateWhereClause(condition as WhereClause<TestUser>)
+			assert.ok(
+				errors.length > 0,
+				`Expected errors for: ${JSON.stringify(condition)}`
+			)
+		}
+	})
+
+	// Add these tests inside the "buildWhereStatement" describe block:
+
+	test("builds single condition with raw value", () => {
+		const result = buildWhereStatement([
+			"id",
+			">",
+			raw`(SELECT max_id FROM ranges)`,
+		])
+		assert.equal(result.sql, "WHERE id > (SELECT max_id FROM ranges)")
+		assert.deepEqual(result.parameterOperators, [])
+	})
+
+	test("builds conditions mixing raw values and parameters", () => {
+		const result = buildWhereStatement([
+			["created_at", ">", raw`CURRENT_TIMESTAMP`],
+			"AND",
+			"name LIKE $pattern",
+			"OR",
+			["updated_at", "<", raw`datetime('now', '-1 day')`],
+		])
+		assert.equal(
+			result.sql,
+			"WHERE created_at > CURRENT_TIMESTAMP AND name LIKE $pattern OR updated_at < datetime('now', '-1 day')"
+		)
+		assert.deepEqual(result.parameterOperators, ["$pattern"])
+	})
+
+	// Add this test inside the "Where Context SQL Generation" describe block:
+
+	test("generates where with raw value conditions", () => {
+		type QueryParams = {
+			pattern: string
+		}
+		const stmt = db.sql<QueryParams>`SELECT * FROM test_data ${{
+			where: [
+				["created_at", ">", raw`datetime('now', '-7 days')`],
+				"AND",
+				"name LIKE $pattern",
+				// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+			] as any,
+		}}`
+
+		assert.equal(
+			stmt
+				.sourceSQL({
+					pattern: "test%",
+				})
+				.trim(),
+			"SELECT *\nFROM test_data\nWHERE created_at > datetime('now', '-7 days')\n  AND name LIKE $pattern"
 		)
 	})
 })

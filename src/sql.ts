@@ -418,7 +418,7 @@ export interface XStatementSync<P extends DataRow, RET = unknown> {
 	run(params?: ValuesParam<P>): StatementResultingChanges
 
 	/** Get SQL with parameters expanded */
-	expandedSQL(params?: ValuesParam<P>): string
+	expandedSQL: string | undefined
 
 	/** Get original SQL source */
 	sourceSQL: (params?: ValuesParam<P>) => string
@@ -500,6 +500,7 @@ const createErrorMessage = <P extends DataRow>(
 export function createXStatementSync<P extends DataRow, RET = unknown>(
 	props: CreateXStatementSyncProps<P, RET>
 ): XStatementSync<P, RET> {
+	let currentStatement: StatementSync | undefined
 	return {
 		all<R = RET>(params: ValuesParam<P> = {} as P) {
 			try {
@@ -539,6 +540,7 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 		get<R = RET>(params: ValuesParam<P> = {} as P) {
 			try {
 				const { stmt, namedParams, hasJsonColumns } = props.build(params as P)
+				currentStatement = stmt
 				const row = stmt.get(namedParams)
 
 				if (!row) {
@@ -563,6 +565,7 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 		run(params: ValuesParam<P> = {} as P) {
 			try {
 				const { stmt, namedParams } = props.build(params as P)
+				currentStatement = stmt
 				return stmt.run(namedParams)
 			} catch (error) {
 				throw new NodeSqliteError(
@@ -577,6 +580,7 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 		iter<R = RET>(params: ValuesParam<P> = {} as P): Iterable<R> & Iterator<R> {
 			try {
 				const { stmt, namedParams, hasJsonColumns } = props.build(params as P)
+				currentStatement = stmt
 				// @ts-expect-error - @types/node is behind
 				const baseIterator = stmt.iterate(namedParams)
 
@@ -613,6 +617,7 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 		*rows<R = RET>(params: ValuesParam<P> = {} as P): Generator<R> {
 			try {
 				const { stmt, namedParams, hasJsonColumns } = props.build(params as P)
+				currentStatement = stmt
 				// @ts-expect-error - @types/node is behind
 				const iterator = stmt.iterate(namedParams)
 
@@ -649,18 +654,8 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 			}
 		},
 
-		expandedSQL(params: ValuesParam<P> = {} as P) {
-			try {
-				const { stmt } = props.build(params as P)
-				return stmt.expandedSQL
-			} catch (error) {
-				throw new NodeSqliteError(
-					"ERR_SQLITE_QUERY",
-					SqlitePrimaryResultCode.SQLITE_ERROR,
-					"Failed to get expanded SQL",
-					createErrorMessage(error, params)
-				)
-			}
+		get expandedSQL() {
+			return currentStatement?.expandedSQL
 		},
 
 		/**

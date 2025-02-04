@@ -30,7 +30,7 @@ describe("buildColsStatement", () => {
 
 	test("handles JSON extraction", () => {
 		const sql = buildColsStatement<TestUser>(["id", "metadata<-json"])
-		assert.equal(sql, "id, json_extract(metadata, '$')")
+		assert.equal(sql, "id, json_extract(metadata, '$') as metadata")
 	})
 
 	test("handles JSON insertion", () => {
@@ -47,7 +47,7 @@ describe("buildColsStatement", () => {
 		])
 		assert.equal(
 			sql,
-			"id, json_extract(metadata, '$'), jsonb(settings), active"
+			"id, json_extract(metadata, '$') as metadata, jsonb(settings), active"
 		)
 	})
 
@@ -60,7 +60,7 @@ describe("buildColsStatement", () => {
 			"name",
 			"metadata<-json",
 		])
-		assert.equal(sql, "id, name, json_extract(metadata, '$')")
+		assert.equal(sql, "id, name, json_extract(metadata, '$') as metadata")
 	})
 
 	test("throws on invalid input", () => {
@@ -114,7 +114,7 @@ describe("buildColsStatement complex scenarios", () => {
 		])
 		assert.equal(
 			sql,
-			"id, name, jsonb(metadata), json_extract(settings, '$'), jsonb(stats), active"
+			"id, name, jsonb(metadata), json_extract(settings, '$') as settings, jsonb(stats), active"
 		)
 	})
 
@@ -126,7 +126,7 @@ describe("buildColsStatement complex scenarios", () => {
 		])
 		assert.equal(
 			sql,
-			"json_extract(metadata, '$'), json_extract(settings, '$'), json_extract(stats, '$')"
+			"json_extract(metadata, '$') as metadata, json_extract(settings, '$') as settings, json_extract(stats, '$') as stats"
 		)
 	})
 

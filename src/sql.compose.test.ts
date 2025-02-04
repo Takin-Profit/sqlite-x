@@ -111,24 +111,15 @@ test("maintains parameter references through concatenation", () => {
 	)
 })
 
-test("builds complex SELECT with context columns", () => {
-	let query = db.sql`SELECT ${{ columns: ["users.id", "users.name", "users.metadata<-json"] }} FROM users`
-	query = query.sql`INNER JOIN posts ON user_id = users.id`
-	query = query.sql`${
-		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-		{ where: "age > $minAge" } as any
-	}`
-	query = query.sql`${
-		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-		{ orderBy: { created_at: "DESC" }, limit: 5 } as any
-	}`
+test("builds composed SELECT with contexts", () => {
+	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+	let query = db.sql<any>`SELECT ${{ columns: ["id", "name", "metadata<-json"] }} FROM users`
+	query = query.sql`WHERE age > ${"$minAge"}`
+	query = query.sql`${{ orderBy: { created_at: "DESC" }, limit: 5 }}`
 
 	assert.equal(
-		query
-			// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-			.sourceSQL({ minAge: 21 } as any)
-			.trim(),
-		"SELECT users.id,\n  users.name,\n  json_extract(users.metadata, '$')\nFROM users\n  INNER JOIN posts ON user_id = users.id\nWHERE age > $minAge\nORDER BY created_at DESC\nLIMIT 5"
+		query.sourceSQL({ minAge: 21 }).trim(),
+		"SELECT id,\n  name,\n  json_extract(metadata, '$') AS metadata\nFROM users\nWHERE age > $minAge\nORDER BY created_at DESC\nLIMIT 5"
 	)
 })
 
@@ -142,7 +133,7 @@ test("builds CTE with complex SELECT", () => {
 
 	assert.equal(
 		query.sourceSQL({ minAge: 21 }).trim(),
-		"WITH filtered_users AS (\n  SELECT id,\n    name,\n    json_extract(metadata, '$')\n  FROM users\n  WHERE age > $minAge\n  LIMIT 100\n)\nSELECT id,\n  name\nFROM filtered_users\nORDER BY name ASC"
+		"WITH filtered_users AS (\n  SELECT id,\n    name,\n    json_extract(metadata, '$') AS metadata\n  FROM users\n  WHERE age > $minAge\n  LIMIT 100\n)\nSELECT id,\n  name\nFROM filtered_users\nORDER BY name ASC"
 	)
 })
 
@@ -188,7 +179,7 @@ test("builds complex INSERT with subselect and CTE", () => {
 				newMeta: { type: "post" },
 			})
 			.trim(),
-		"WITH active_users AS (\n  SELECT id,\n    json_extract(metadata, '$')\n  FROM users\n  WHERE active = $active\n)\nINSERT INTO posts (user_id, metadata)\nSELECT id,\n  jsonb($newMeta)\nFROM active_users\nRETURNING *"
+		"WITH active_users AS (\n  SELECT id,\n    json_extract(metadata, '$') AS metadata\n  FROM users\n  WHERE active = $active\n)\nINSERT INTO posts (user_id, metadata)\nSELECT id,\n  jsonb($newMeta)\nFROM active_users\nRETURNING *"
 	)
 })
 

@@ -508,7 +508,7 @@ export function buildColsStatement<P extends DataRow>(
 					}
 					if (col.endsWith("<-json")) {
 						const columnName = col.slice(0, -6)
-						return `json_extract(${columnName}, '$')`
+						return `json_extract(${columnName}, '$') as ${columnName}`
 					}
 					return col
 				}

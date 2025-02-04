@@ -8,9 +8,9 @@ import {
 	combineContexts,
 	validateContextCombination,
 	validateSqlContext,
-	type SqlContext,
 } from "./context.js"
-import { buildSchema, type Schema } from "#schema.js"
+import { buildSchema } from "#schema.js"
+import type { Schema, SqlContext } from "#types.js"
 
 type TestUser = {
 	id: number
@@ -268,7 +268,11 @@ describe("Context Combination Validation", () => {
 	test("rejects incompatible clause combinations", () => {
 		const contexts: SqlContext<TestUser>[] = [
 			{ values: ["$name"] },
-			{ set: ["$age"] },
+			{
+				set: {
+					age: "$age",
+				},
+			},
 		]
 		const errors = validateContextCombination(contexts)
 		assert.equal(errors.length, 1)

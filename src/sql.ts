@@ -12,19 +12,25 @@ import {
 	buildColsStatement,
 	isJsonColumns,
 	isSqlContext,
-	type SqlContext,
 	validateContextCombination,
 	validateSqlContext,
 } from "#context"
 import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors"
 import { buildValuesStatement } from "#values"
-import type { Primitive } from "type-fest"
 import type {
 	StatementResultingChanges,
 	StatementSync,
 	SupportedValueType,
 } from "node:sqlite"
-import { isRawValue, type DataRow, type RawValue } from "#types"
+import {
+	isRawValue,
+	type ParamValue,
+	type SqlOptions,
+	type SqlTemplateValues,
+	type DataRow,
+	type RawValue,
+	type SqlContext,
+} from "#types"
 import { buildWhereStatement } from "#where.js"
 import sqlFormatter from "@sqltools/formatter"
 import { buildOrderByStatement } from "#order-by"
@@ -32,37 +38,6 @@ import { buildSchema } from "#schema"
 import type { Config } from "@sqltools/formatter/lib/core/types"
 import stringify from "#stringify"
 import { buildSetStatement } from "#set.js"
-
-/**
- * Represents a parameter operator that references a property of type P
- */
-export type ParameterOperator<P extends DataRow> = `$${keyof P & string}`
-
-// Step 2: Get keys of non-primitive values
-type NonPrimitiveKeys<T> = {
-	[K in keyof T]: T[K] extends Primitive ? never : K
-}[keyof T]
-
-/**
- * Represents a parameter operator that converts a property to JSON
- * Only allows non-primitive values to be converted to JSON
- */
-export type ToJson<P extends DataRow> =
-	`$${NonPrimitiveKeys<P> & string}${"->json"}`
-
-/**
- * Represents a parameter operator that parses a property from JSON
- * Only allows non-primitive values to be parsed from JSON
- */
-export type FromJson<P extends DataRow> =
-	`$${NonPrimitiveKeys<P> & string}${"<-json"}` // only supports json_extract
-/**
- * Union type of all possible parameter operators
- */
-export type ParamValue<P extends DataRow> =
-	| ParameterOperator<P>
-	| ToJson<P>
-	| FromJson<P>
 
 function toSupportedValue(value: unknown): SupportedValueType {
 	if (
@@ -78,38 +53,6 @@ function toSupportedValue(value: unknown): SupportedValueType {
 		return stringify(value) // Use stringify for objects
 	}
 	return String(value)
-}
-/**
- * Parameter values and contexts that can be used in SQL template literals
- */
-export type SqlTemplateValues<P extends DataRow, R = P> = Array<
-	ParamValue<P> | SqlContext<P, R> | RawValue
->
-
-/**
- * Configuration for SQL formatting
- */
-export type FormatterConfig =
-	| false
-	| {
-			/** Indentation string (default: two spaces) */
-			indent?: string
-
-			/** Case for SQL keywords */
-			reservedWordCase?: "upper" | "lower"
-
-			/** Lines between queries */
-			linesBetweenQueries?: number | "preserve"
-	  }
-
-/**
- * Options for initializing SQL builder
- */
-export type SqlOptions<P extends DataRow, R = P> = {
-	strings: readonly string[]
-	paramOperators: SqlTemplateValues<P, R>
-	formatterConfig?: FormatterConfig
-	generatedSql?: string
 }
 
 export const raw = (

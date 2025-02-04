@@ -4,13 +4,10 @@
 
 import { test, describe, beforeEach, afterEach } from "node:test"
 import assert from "node:assert/strict"
-import {
-	buildWhereStatement,
-	validateWhereClause,
-	type WhereClause,
-} from "#where"
+import { buildWhereStatement, validateWhereClause } from "#where"
 import { DB } from "#database"
 import { raw } from "#sql.js"
+import type { WhereClause } from "#types.js"
 
 interface TestUser {
 	id: number

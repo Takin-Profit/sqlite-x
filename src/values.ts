@@ -1,8 +1,7 @@
 // noinspection t
 
-import type { InsertOptions } from "#context.js"
 import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors"
-import type { DataRow } from "#types"
+import type { DataRow, InsertOptions } from "#types"
 
 type BuildSqlResult = {
 	columns: string[]

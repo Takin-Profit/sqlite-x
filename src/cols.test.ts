@@ -29,20 +29,12 @@ describe("buildColsStatement", () => {
 	})
 
 	test("handles JSON extraction", () => {
-		const sql = buildColsStatement<TestUser>([
-			"id",
-			"metadata<-json",
-			// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-		] as any)
+		const sql = buildColsStatement<TestUser>(["id", "metadata<-json"])
 		assert.equal(sql, "id, json_extract(metadata, '$')")
 	})
 
 	test("handles JSON insertion", () => {
-		const sql = buildColsStatement<TestUser>([
-			"id",
-			"settings->json",
-			// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-		] as any)
+		const sql = buildColsStatement<TestUser>(["id", "settings->json"])
 		assert.equal(sql, "id, jsonb(settings)")
 	})
 
@@ -52,202 +44,98 @@ describe("buildColsStatement", () => {
 			"metadata<-json",
 			"settings->json",
 			"active",
-			// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-		] as any)
+		])
 		assert.equal(
 			sql,
 			"id, json_extract(metadata, '$'), jsonb(settings), active"
 		)
 	})
-})
 
-describe("buildColsStatement with new format", () => {
-	interface TestTable {
-		id: number
-		name: string
-		settings: { theme: string }
-		metadata: { tags: string[] }
-		config: object
-		active: boolean
-	}
-
-	test("handles * with jsonColumns config", () => {
-		const sql = buildColsStatement<TestTable>([
-			"*",
-			{ jsonColumns: ["settings", "metadata", "config"] },
-		])
-		assert.equal(
-			sql,
-			"id, name, active, json_extract(settings, '$') as settings, json_extract(metadata, '$') as metadata, json_extract(config, '$') as config"
-		)
-	})
-
-	test("throws on invalid jsonColumns config", () => {
-		assert.throws(
-			() =>
-				// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-				buildColsStatement<TestTable>(["*", { jsonColumns: "invalid" as any }]),
-			{
-				name: "NodeSqliteError",
-				message: /When using '\*' with config, jsonColumns must be an array/,
-			}
-		)
-	})
-
-	test("maintains backwards compatibility with original formats", () => {
-		// Test original * format
-		assert.equal(buildColsStatement<TestTable>("*"), "*")
-
-		// Test original array format
-		assert.equal(
-			buildColsStatement<TestTable>(["id", "name", "active"]),
-			"id, name, active"
-		)
-
-		// Test original JSON notation
-		assert.equal(
-			// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-			buildColsStatement<TestTable>(["id", "settings<-json", "active"] as any),
-			"id, json_extract(settings, '$'), active"
-		)
-	})
-
-	test("handles empty jsonColumns array", () => {
-		const sql = buildColsStatement<TestTable>(["*", { jsonColumns: [] }])
-		assert.equal(sql, "*")
-	})
-
-	test("throws on invalid input format", () => {
-		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-		assert.throws(() => buildColsStatement<TestTable>({} as any), {
-			name: "NodeSqliteError",
-			message:
-				/Columns must be '\*', an array of columns, or \['\*', { jsonColumns: \[...\] }\]/,
-		})
-	})
-})
-
-describe("buildColsStatement advanced scenarios", () => {
-	interface ComplexTable {
-		id: number
-		name: string
-		metadata: {
-			tags: string[]
-			owner: {
-				id: number
-				role: string
-			}
-		}
-		settings: {
-			theme: {
-				dark: boolean
-				colors: {
-					primary: string
-					secondary: string
-				}
-			}
-			notifications: boolean
-		}
-		preferences: {
-			language: string
-			timezone: string
-		}
-		stats: {
-			views: number
-			likes: number[]
-		}
-		active: boolean
-	}
-
-	test("handles nested JSON fields with multiple extracts", () => {
-		const sql = buildColsStatement<ComplexTable>([
-			"*",
-			{ jsonColumns: ["metadata", "settings", "preferences", "stats"] },
-		])
-		assert.equal(
-			sql,
-			"id, name, active, " +
-				"json_extract(metadata, '$') as metadata, " +
-				"json_extract(settings, '$') as settings, " +
-				"json_extract(preferences, '$') as preferences, " +
-				"json_extract(stats, '$') as stats"
-		)
-	})
-
-	test("handles combination of JSON extracts and regular columns", () => {
-		const sql = buildColsStatement<ComplexTable>([
+	test("removes duplicate columns while preserving order", () => {
+		const sql = buildColsStatement<TestUser>([
 			"id",
+			"name",
+			"id",
+			"metadata<-json",
 			"name",
 			"metadata<-json",
-			"active",
-			"stats<-json",
+		])
+		assert.equal(sql, "id, name, json_extract(metadata, '$')")
+	})
+
+	test("throws on invalid input", () => {
+		assert.throws(
 			// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-		] as any)
-		assert.equal(
-			sql,
-			"id, name, json_extract(metadata, '$'), active, json_extract(stats, '$')"
-		)
-	})
-
-	test("handles single JSON column with * selector", () => {
-		const sql = buildColsStatement<ComplexTable>([
-			"*",
-			{ jsonColumns: ["settings"] },
-		])
-		assert.equal(
-			sql,
-			"id, name, active, json_extract(settings, '$') as settings"
-		)
-	})
-
-	test("preserves column order in jsonColumns array", () => {
-		const sql = buildColsStatement<ComplexTable>([
-			"*",
+			() => buildColsStatement<TestUser>({} as any),
 			{
-				jsonColumns: ["stats", "metadata", "preferences", "settings"],
-			},
-		])
-		assert.equal(
-			sql,
-			"id, name, active, json_extract(stats, '$') as stats, json_extract(metadata, '$') as metadata, json_extract(preferences, '$') as preferences, json_extract(settings, '$') as settings"
+				name: "NodeSqliteError",
+				message: /Columns must be '\*' or an array of columns/,
+			}
 		)
 	})
+})
 
-	test("handles mixing different JSON operation styles", () => {
+interface ComplexTable {
+	id: number
+	name: string
+	metadata: {
+		tags: string[]
+		owner: {
+			id: number
+			role: string
+		}
+	}
+	settings: {
+		theme: {
+			dark: boolean
+			colors: {
+				primary: string
+				secondary: string
+			}
+		}
+		notifications: boolean
+	}
+	stats: {
+		views: number
+		likes: number[]
+	}
+	active: boolean
+}
+
+describe("buildColsStatement complex scenarios", () => {
+	test("handles complex JSON fields", () => {
 		const sql = buildColsStatement<ComplexTable>([
 			"id",
-			"metadata->json",
 			"name",
+			"metadata->json",
 			"settings<-json",
+			"stats->json",
 			"active",
-			// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-		] as any)
-		assert.equal(
-			sql,
-			"id, jsonb(metadata), name, json_extract(settings, '$'), active"
-		)
-	})
-
-	test("silently removes duplicate JSON columns while preserving order", () => {
-		const sql = buildColsStatement<ComplexTable>([
-			"*",
-			{
-				jsonColumns: [
-					"metadata",
-					"metadata",
-					"settings",
-					"metadata",
-					"settings",
-					"stats",
-				],
-			},
 		])
 		assert.equal(
 			sql,
-			"id, name, active, " +
-				"json_extract(metadata, '$') as metadata, " +
-				"json_extract(settings, '$') as settings, " +
-				"json_extract(stats, '$') as stats"
+			"id, name, jsonb(metadata), json_extract(settings, '$'), jsonb(stats), active"
 		)
+	})
+
+	test("handles multiple JSON extractions", () => {
+		const sql = buildColsStatement<ComplexTable>([
+			"metadata<-json",
+			"settings<-json",
+			"stats<-json",
+		])
+		assert.equal(
+			sql,
+			"json_extract(metadata, '$'), json_extract(settings, '$'), json_extract(stats, '$')"
+		)
+	})
+
+	test("handles multiple JSON insertions", () => {
+		const sql = buildColsStatement<ComplexTable>([
+			"metadata->json",
+			"settings->json",
+			"stats->json",
+		])
+		assert.equal(sql, "jsonb(metadata), jsonb(settings), jsonb(stats)")
 	})
 })

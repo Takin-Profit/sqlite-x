@@ -26,13 +26,14 @@ import {
 import { tmpdir } from "node:os"
 import { accessSync, renameSync, unlinkSync } from "node:fs"
 import { type Logger, NoopLogger } from "#logger"
-import {
-	createXStatementSync,
-	Sql,
-	type SqlTemplateValues,
-	type FormatterConfig,
-} from "#sql"
-import type { CleanupPragmas, DataRow, DBOptions } from "#types"
+import { createXStatementSync, Sql } from "#sql"
+import type {
+	CleanupPragmas,
+	DataRow,
+	DBOptions,
+	FormatterConfig,
+	SqlTemplateValues,
+} from "#types"
 import { buildIndexStatement, type IndexDef } from "#idx.js"
 import stringify from "#stringify.js"
 

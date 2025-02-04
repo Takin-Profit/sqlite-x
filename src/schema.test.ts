@@ -5,9 +5,10 @@
 // columns.test.ts
 import { test, describe, beforeEach, afterEach } from "node:test"
 import assert from "node:assert/strict"
-import { validateSchema, type Schema, buildSchema } from "./schema"
+import { validateSchema, buildSchema } from "./schema"
 import { NodeSqliteError } from "#errors"
 import { DB } from "#database"
+import type { Schema } from "#types"
 
 interface TestUser {
 	id: number

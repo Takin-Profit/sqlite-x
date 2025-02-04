@@ -1,9 +1,8 @@
 import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors.js"
-import type { DataRow } from "#types.js"
 import { validationErr, type ValidationError } from "#validate.js"
 
-// Allow up to 3 keys from the table type
-
+// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+type DataRow = { [key: string]: any }
 export type DeferrableStatus =
 	| "NOT DEFERRABLE"
 	| "DEFERRABLE INITIALLY IMMEDIATE"

@@ -2,42 +2,17 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-import { validateSchema, type Schema } from "#schema.js"
+import { validateSchema } from "#schema.js"
 import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors"
-import type { ToJson, ParameterOperator, FromJson } from "#sql"
-import { isRawValue, type DataRow, type RawValue } from "#types"
+import {
+	type ColumnOptions,
+	isRawValue,
+	type SqlContext,
+	type DataRow,
+	type WhereClause,
+} from "#types"
 import { validationErr, type ValidationError } from "#validate"
-import { validateWhereClause, type WhereClause } from "#where"
-
-export type ValueType<P extends DataRow> = ParameterOperator<P> | ToJson<P>
-
-export type SetOptions<P extends DataRow> =
-	| { [K in keyof P]?: ValueType<P> | RawValue }
-	| ["*", { jsonColumns: (keyof P)[] }]
-	| "*"
-
-export type InsertOptions<P extends DataRow> =
-	| ValueType<P>[]
-	| "*"
-	| ["*", { jsonColumns?: (keyof P)[]; batch?: boolean }]
-
-export type ColumnOptions<P extends DataRow> =
-	| (keyof P | FromJson<P> | ToJson<P>)[]
-	| "*"
-	| ["*", { jsonColumns: (keyof P)[] }]
-
-// Core SQL context type
-export type SqlContext<P extends DataRow, R = P> = Partial<{
-	columns: ColumnOptions<P>
-	values: InsertOptions<P>
-	set: SetOptions<P>
-	where: WhereClause<P>
-	orderBy: Partial<Record<keyof P, "ASC" | "DESC">>
-	limit: number
-	offset: number
-	returning: (keyof R)[] | "*" | ["*", { jsonColumns?: (keyof R)[] }]
-	schema: Schema<P>
-}>
+import { validateWhereClause } from "#where"
 
 export function validateSqlContext<P extends DataRow, R = P>(
 	value: unknown
@@ -512,50 +487,6 @@ export function buildColsStatement<P extends DataRow>(
 		return "*"
 	}
 
-	// Handle the ["*", { jsonColumns: [...] }] format
-	if (Array.isArray(cols) && cols[0] === "*" && cols.length === 2) {
-		const [, config] = cols
-		// Allow empty jsonColumns array
-		if (
-			!config ||
-			typeof config !== "object" ||
-			!("jsonColumns" in config) ||
-			!Array.isArray(config.jsonColumns)
-		) {
-			throw new NodeSqliteError(
-				"ERR_SQLITE_PARAM",
-				SqlitePrimaryResultCode.SQLITE_ERROR,
-				"Invalid columns configuration",
-				"When using '*' with config, jsonColumns must be an array",
-				undefined
-			)
-		}
-
-		// No need to generate JSON extracts if array is empty
-		if (config.jsonColumns.length === 0) {
-			return "*"
-		}
-
-		// Remove duplicates while preserving order of first occurrence
-		const seen = new Set<string>()
-		const uniqueJsonColumns = config.jsonColumns.filter(col => {
-			const colStr = String(col)
-			if (seen.has(colStr)) {
-				return false
-			}
-			seen.add(colStr)
-			return true
-		})
-
-		// Format JSON columns with json_extract
-		const jsonColumns = uniqueJsonColumns
-			.map(col => `json_extract(${String(col)}, '$') as ${String(col)}`)
-			.join(", ")
-
-		// Return all non-JSON columns explicitly plus JSON extracts
-		return `id, name, active, ${jsonColumns}`
-	}
-
 	// Handle array of column specifications
 	if (Array.isArray(cols)) {
 		// Remove duplicates while preserving order
@@ -572,11 +503,11 @@ export function buildColsStatement<P extends DataRow>(
 			.map(col => {
 				if (typeof col === "string") {
 					if (col.endsWith("->json")) {
-						const columnName = col.split("->")[0]
+						const columnName = col.slice(0, -6)
 						return `jsonb(${columnName})`
 					}
 					if (col.endsWith("<-json")) {
-						const columnName = col.split("<-")[0]
+						const columnName = col.slice(0, -6)
 						return `json_extract(${columnName}, '$')`
 					}
 					return col
@@ -590,7 +521,7 @@ export function buildColsStatement<P extends DataRow>(
 		"ERR_SQLITE_PARAM",
 		SqlitePrimaryResultCode.SQLITE_ERROR,
 		"Invalid columns format",
-		"Columns must be '*', an array of columns, or ['*', { jsonColumns: [...] }]",
+		"Columns must be '*' or an array of columns",
 		undefined
 	)
 }

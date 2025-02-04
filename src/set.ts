@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-import { validateSetOptions, type SetOptions } from "#context"
+import { validateSetOptions } from "#context"
 import { NodeSqliteError, SqlitePrimaryResultCode } from "#errors.js"
-import { isRawValue, type DataRow } from "#types"
+import { isRawValue, type SetOptions, type DataRow } from "#types"
 
 // In values.ts
 export function buildSetStatement<P extends DataRow>(

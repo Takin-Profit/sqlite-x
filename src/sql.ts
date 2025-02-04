@@ -505,6 +505,7 @@ export function createXStatementSync<P extends DataRow, RET = unknown>(
 		all<R = RET>(params: ValuesParam<P> = {} as P) {
 			try {
 				const { stmt, namedParams, hasJsonColumns } = props.build(params as P)
+				currentStatement = stmt
 				const results = stmt.all(namedParams)
 				if (!results || !results.length) {
 					// No results case

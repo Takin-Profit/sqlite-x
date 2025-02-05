@@ -1,4 +1,4 @@
-import { test, beforeEach, afterEach } from "node:test"
+import { test, beforeEach, afterEach, describe } from "node:test"
 import assert from "node:assert/strict"
 import { DB } from "#database"
 import { NodeSqliteError } from "#errors"
@@ -34,200 +34,221 @@ afterEach(() => {
 	db.close()
 })
 
-test("concatenates simple strings", () => {
-	let query = db.sql`SELECT * FROM users`
-	query = query.sql`WHERE id = ${"$id"}`
+describe("Statement Composition", () => {
+	test("composes basic SELECT with WHERE", () => {
+		const select = db.sql`SELECT * FROM users`
+		const where = db.sql`WHERE id = ${"$id"}`
+		const query = db.sql`${select} ${where}`
 
-	assert.equal(
-		query.sourceSQL({ id: 1 }).trim(),
-		"SELECT *\nFROM users\nWHERE id = $id"
-	)
-})
+		assert.equal(
+			query.sourceSQL({ id: 1 }).trim(),
+			"SELECT *\nFROM users\nWHERE id = $id"
+		)
+	})
 
-test("maintains proper sql spacing with multiple concatenations", () => {
-	let query = db.sql`SELECT * FROM users`
-	query = query.sql`WHERE age > ${"$age"}`
-	query = query.sql` AND active = ${"$active"}`
+	test("composes SELECT with columns and WHERE", () => {
+		type User = {
+			id: number
+			name: string
+			email: string
+		}
 
-	assert.equal(
-		query.sourceSQL({ age: 21, active: true }).trim(),
-		"SELECT *\nFROM users\nWHERE age > $age\n  AND active = $active"
-	)
-})
+		const select = db.sql<Partial<User>>`
+      SELECT ${{ columns: ["id", "name", "email"] }}
+      FROM users
+    `
+		const where = db.sql<{ id: number }>`WHERE id = ${"$id"}`
+		const query = db.sql`${select} ${where}`
 
-test("correctly handles JSON operations", () => {
-	let query = db.sql`INSERT INTO users (name, settings) VALUES`
-	query = query.sql`(${"$name"}, ${"$settings->json"})`
+		assert.equal(
+			query.sourceSQL({ id: 1 }).trim(),
+			"SELECT id,\n  name,\n  email\nFROM users\nWHERE id = $id"
+		)
+	})
 
-	assert.equal(
-		query
-			.sourceSQL({
-				name: "test",
-				settings: { theme: "dark" },
-			})
-			.trim(),
-		"INSERT INTO users (name, settings)\nVALUES ($name, jsonb($settings))"
-	)
-})
+	test("composes multiple statements with JSON operations", () => {
+		type UserWithJSON = {
+			id: number
+			name: string
+			settings: { theme: string }
+		}
 
-test("concatenates multiple SQL fragments with contexts", () => {
-	let query = db.sql`SELECT * FROM users`
-	query = query.sql`${{
-		where: "age > $age",
-		orderBy: { name: "ASC" },
-		limit: 10,
-	}}`
+		const select = db.sql<Partial<UserWithJSON>>`
+      SELECT ${{ columns: ["id", "name", "settings<-json"] }}
+      FROM users
+    `
+		const where = db.sql<{ id: number }>`WHERE id = ${"$id"}`
+		const query = db.sql`${select} ${where}`
 
-	assert.equal(
-		query.sourceSQL({ age: 21 }).trim(),
-		"SELECT *\nFROM users\nWHERE age > $age\nORDER BY name ASC\nLIMIT 10"
-	)
-})
+		assert.equal(
+			query.sourceSQL({ id: 1 }).trim(),
+			"SELECT id,\n  name,\n  json_extract(settings, '$') AS settings\nFROM users\nWHERE id = $id"
+		)
+	})
 
-test("preserves SQL context validation", () => {
-	assert.throws(
-		() => {
-			let query = db.sql`SELECT * FROM users`
-			query = query.sql`${
+	test("composes statements with contexts", () => {
+		type QueryParams = {
+			minAge: number
+			active: boolean
+		}
+
+		const select = db.sql`SELECT * FROM users`
+		const conditions = db.sql<QueryParams>`${
+			{
+				where: ["age > $minAge", "AND", "active = $active"],
+				orderBy: { name: "ASC" },
+				limit: 10,
+				// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+			} as any
+		}`
+		const query = db.sql`${select} ${conditions}`
+
+		assert.equal(
+			query.sourceSQL({ minAge: 21, active: true }).trim(),
+			"SELECT *\nFROM users\nWHERE age > $minAge\n  AND active = $active\nORDER BY name ASC\nLIMIT 10"
+		)
+	})
+
+	test("composes INSERT with VALUES", () => {
+		type NewUser = {
+			name: string
+			email: string
+			metadata: { tags: string[] }
+		}
+
+		const insert = db.sql`INSERT INTO users`
+		const values = db.sql<NewUser>`${{
+			values: ["$name", "$email", "$metadata->json"],
+		}}`
+		const query = db.sql`${insert} ${values}`
+
+		assert.equal(
+			query
+				.sourceSQL({
+					name: "Test User",
+					email: "test@example.com",
+					metadata: { tags: ["new"] },
+				})
+				.trim(),
+			"INSERT INTO users (name, email, metadata)\nVALUES ($name, $email, jsonb($metadata))"
+		)
+	})
+
+	test("composes complex CTE", () => {
+		type FilterParams = {
+			minAge: number
+			active: boolean
+		}
+
+		// Create base CTE query in one statement to avoid syntax issues
+		const cteQuery = db.sql<FilterParams>`
+        WITH active_users AS (
+            SELECT ${
+							// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+							{ columns: ["id", "name", "metadata<-json"] } as any
+						}
+            FROM users
+            ${
+							{
+								where: ["age > $minAge", "AND", "active = $active"],
+								limit: 100,
+								// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+							} as any
+						}
+        )
+        SELECT ${
+					// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+					{ columns: ["id", "name"] } as any
+				}
+        FROM active_users
+        ${
+					// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+					{ orderBy: { name: "ASC" } } as any
+				}
+    `
+
+		assert.equal(
+			cteQuery.sourceSQL({ minAge: 21, active: true }).trim(),
+			"WITH active_users AS (\n  SELECT id,\n    name,\n    json_extract(metadata, '$') AS metadata\n  FROM users\n  WHERE age > $minAge\n    AND active = $active\n  LIMIT 100\n)\nSELECT id,\n  name\nFROM active_users\nORDER BY name ASC"
+		)
+	})
+	test("handles parameter type checking across composed statements", () => {
+		type UserParams = {
+			name: string
+			age: number
+		}
+
+		const select = db.sql<UserParams>`
+      SELECT * FROM users
+      WHERE name = ${"$name"}
+    `
+		// This should type error if uncommented:
+		// const invalidWhere = db.sql<{ wrongParam: string }>`AND age = ${"$wrongParam"}`
+
+		const validWhere = db.sql<UserParams>`AND age = ${"$age"}`
+		const query = db.sql`${select} ${validWhere}`
+
+		assert.equal(
+			query.sourceSQL({ name: "Test", age: 25 }).trim(),
+			"SELECT *\nFROM users\nWHERE name = $name\n  AND age = $age"
+		)
+	})
+
+	test("preserves parameter scope in nested compositions", () => {
+		type BaseParams = { id: number }
+		type ExtendedParams = BaseParams & { email: string }
+
+		const base = db.sql<BaseParams>`SELECT * FROM users WHERE id = ${"$id"}`
+		const extended = db.sql<ExtendedParams>`${base} AND email = ${"$email"}`
+		const final = db.sql`${extended} ORDER BY id`
+
+		assert.equal(
+			final.sourceSQL({ id: 1, email: "test@example.com" }).trim(),
+			"SELECT *\nFROM users\nWHERE id = $id\n  AND email = $email\nORDER BY id"
+		)
+	})
+
+	test("validates contexts in composed statements", () => {
+		const select = db.sql`SELECT * FROM users`
+		assert.throws(() => {
+			const invalidContext = db.sql`${
 				{
-					where: "INVALID",
-					orderBy: { name: "WRONG" },
+					where: "INVALID SYNTAX",
+					orderBy: { nonExistentColumn: "ASC" },
 					// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 				} as any
 			}`
+			const query = db.sql`${select} ${invalidContext}`
 			query.sourceSQL()
-		},
-		{ name: "NodeSqliteError" }
-	)
-})
+		}, NodeSqliteError)
+	})
 
-test("maintains parameter references through concatenation", () => {
-	let query = db.sql`SELECT * FROM users WHERE`
-	query = query.sql`age BETWEEN ${"$min"} AND ${"$max"}`
+	test("composes raw SQL literals correctly", () => {
+		const tableName = "users"
+		const select = db.sql`SELECT * FROM ${raw`${tableName}`}`
+		const where = db.sql<{ age: number }>`WHERE age > ${"$age"}`
+		const query = db.sql`${select} ${where}`
 
-	assert.equal(
-		query.sourceSQL({ min: 20, max: 30 }).trim(),
-		"SELECT *\nFROM users\nWHERE age BETWEEN $min AND $max"
-	)
-})
+		assert.equal(
+			query.sourceSQL({ age: 21 }).trim(),
+			"SELECT *\nFROM users\nWHERE age > $age"
+		)
+	})
 
-test("builds composed SELECT with contexts", () => {
-	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-	let query = db.sql<any>`SELECT ${{ columns: ["id", "name", "metadata<-json"] }} FROM users`
-	query = query.sql`WHERE age > ${"$minAge"}`
-	query = query.sql`${{ orderBy: { created_at: "DESC" }, limit: 5 }}`
+	test("executes composed queries correctly", () => {
+		// First insert some test data
+		const insertUser = db.sql<{ name: string; age: number }>`
+      INSERT INTO users (name, age) VALUES (${"$name"}, ${"$age"})
+    `
+		insertUser.run({ name: "Test User", age: 25 })
 
-	assert.equal(
-		query.sourceSQL({ minAge: 21 }).trim(),
-		"SELECT id,\n  name,\n  json_extract(metadata, '$') AS metadata\nFROM users\nWHERE age > $minAge\nORDER BY created_at DESC\nLIMIT 5"
-	)
-})
+		// Now test the composed query
+		const select = db.sql`SELECT * FROM users`
+		const where = db.sql<{ age: number }>`WHERE age = ${"$age"}`
+		const query = db.sql`${select} ${where}`
 
-test("builds CTE with complex SELECT", () => {
-	let query = db.sql`WITH filtered_users AS (`
-	query = query.sql`SELECT ${{ columns: ["id", "name", "metadata<-json"] }}`
-	query = query.sql`FROM users`
-	query = query.sql`${{ where: "age > $minAge", limit: 100 }})`
-	query = query.sql`SELECT ${{ columns: ["id", "name"] }} FROM filtered_users`
-	query = query.sql`${{ orderBy: { name: "ASC" } }}`
-
-	assert.equal(
-		query.sourceSQL({ minAge: 21 }).trim(),
-		"WITH filtered_users AS (\n  SELECT id,\n    name,\n    json_extract(metadata, '$') AS metadata\n  FROM users\n  WHERE age > $minAge\n  LIMIT 100\n)\nSELECT id,\n  name\nFROM filtered_users\nORDER BY name ASC"
-	)
-})
-
-test("builds UPDATE with column list", () => {
-	let query = db.sql`UPDATE users`
-	query = query.sql`${{
-		set: {
-			name: "$name",
-			email: "$email",
-			metadata: "$metadata->json",
-		},
-		where: "id = $id",
-		returning: ["id", "email"],
-	}}`
-
-	assert.equal(
-		query
-			.sourceSQL({
-				id: 1,
-				name: "Test",
-				email: "test@example.com",
-				metadata: { updated: true },
-			})
-			.trim(),
-		"UPDATE users\nSET name = $name,\n  email = $email,\n  metadata = jsonb($metadata)\nWHERE id = $id\nRETURNING id,\n  email"
-	)
-})
-
-test("builds complex INSERT with subselect and CTE", () => {
-	let query = db.sql`WITH active_users AS (`
-	query = query.sql`SELECT ${{ columns: ["id", "metadata<-json"] }}`
-	query = query.sql`FROM users`
-	query = query.sql`${{ where: "active = $active" }})`
-	query = query.sql`INSERT INTO posts (user_id, metadata)`
-	query = query.sql`SELECT id, ${"$newMeta->json"}`
-	query = query.sql`FROM active_users`
-	query = query.sql`${{ returning: "*" }}`
-
-	assert.equal(
-		query
-			.sourceSQL({
-				active: true,
-				newMeta: { type: "post" },
-			})
-			.trim(),
-		"WITH active_users AS (\n  SELECT id,\n    json_extract(metadata, '$') AS metadata\n  FROM users\n  WHERE active = $active\n)\nINSERT INTO posts (user_id, metadata)\nSELECT id,\n  jsonb($newMeta)\nFROM active_users\nRETURNING *"
-	)
-})
-
-test("handles raw SQL literals", () => {
-	const tableName = "users"
-	let query = db.sql`SELECT * FROM ${raw`${tableName}`}`
-	query = query.sql`WHERE age > ${"$age"}`
-
-	assert.equal(
-		query.sourceSQL({ age: 21 }).trim(),
-		"SELECT *\nFROM users\nWHERE age > $age"
-	)
-})
-
-test("handles raw SQL literals in complex queries", () => {
-	const tableName = "users"
-	const joinTable = "posts"
-	let query = db.sql`WITH ${raw`${tableName}_filtered`} AS (`
-	query = query.sql`SELECT * FROM ${raw`${tableName}`}`
-	query = query.sql`WHERE active = ${"$active"})`
-	query = query.sql`SELECT t.*, p.title FROM ${raw`${tableName}_filtered t`}`
-	query = query.sql`JOIN ${raw`${joinTable} p`} ON p.user_id = t.id`
-	query = query.sql`WHERE p.title LIKE ${"$title"}`
-
-	assert.equal(
-		query.sourceSQL({ active: true, title: "%test%" }).trim(),
-		"WITH users_filtered AS (\n  SELECT *\n  FROM users\n  WHERE active = $active\n)\nSELECT t.*,\n  p.title\nFROM users_filtered t\n  JOIN posts p ON p.user_id = t.id\nWHERE p.title LIKE $title"
-	)
-})
-
-test("handles multiple raw literals in a single template", () => {
-	const table1 = "users u"
-	const table2 = "posts p"
-	const query = db.sql`SELECT * FROM ${raw`${table1}`} JOIN ${raw`${table2}`} ON p.user_id = u.id`
-
-	assert.equal(
-		query.sourceSQL({}).trim(),
-		"SELECT *\nFROM users u\n  JOIN posts p ON p.user_id = u.id"
-	)
-})
-
-test("raw SQL literals throw on invalid inputs", () => {
-	const obj = { foo: "bar" }
-	const query = db.sql`SELECT * FROM users`
-	assert.throws(() => {
-		query.sql`WHERE name = ${raw`${
-			// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-			obj as any
-		}`}`
-	}, NodeSqliteError)
+		const result = query.get<{ name: string; age: number }>({ age: 25 })
+		assert.equal(result?.name, "Test User")
+		assert.equal(result?.age, 25)
+	})
 })

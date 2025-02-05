@@ -129,6 +129,7 @@ export type ToJson<P extends DataRow> =
  */
 export type FromJson<P extends DataRow> =
 	`$${NonPrimitiveKeys<P> & string}${"<-json"}` // only supports json_extract
+
 /**
  * Union type of all possible parameter operators
  */
@@ -137,11 +138,17 @@ export type ParamValue<P extends DataRow> =
 	| ToJson<P>
 	| FromJson<P>
 
+export type SqlTemplateValue<P extends DataRow, R = P> =
+	| ParamValue<P>
+	| SqlContext<P, R>
+	| RawValue
+	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+	| XStatementSync<any, any>
 /**
  * Parameter values and contexts that can be used in SQL template literals
  */
 export type SqlTemplateValues<P extends DataRow, R = P> = Array<
-	ParamValue<P> | SqlContext<P, R> | RawValue
+	SqlTemplateValue<P, R>
 >
 
 /**

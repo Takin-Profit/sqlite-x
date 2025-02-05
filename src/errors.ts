@@ -103,7 +103,7 @@ export class NodeSqliteError extends Error implements NodeSqliteErrorData {
 
 	static fromNodeSqlite(
 		error: Error & {
-			code?: string
+					code?: string
 			errcode?: number
 			errstr?: string
 		}

@@ -19,7 +19,7 @@
   "scripts": {
     "build": "tsup",
     "test": "tsx --test --experimental-sqlite src/**/*.test.ts",
-    "test:set": "tsx --test --experimental-sqlite src/sql.test.ts",
+    "test:compose": "tsx --test --experimental-sqlite src/sql.compose.test.ts",
     "bundle:claude": "node claude-bundle.mjs"
   },
   "keywords": [

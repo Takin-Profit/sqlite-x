@@ -252,3 +252,114 @@ describe("Statement Composition", () => {
 		assert.equal(result?.age, 25)
 	})
 })
+
+describe("Complex Query Integration", () => {
+	let db: DB
+
+	beforeEach(() => {
+		db = new DB({ location: ":memory:" })
+		db.exec(`
+      CREATE TABLE executions (
+        id INTEGER PRIMARY KEY,
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        actionType TEXT NOT NULL,
+        triggeredBy TEXT NOT NULL,
+        data TEXT NOT NULL,
+        loggedAlertId INTEGER,
+        status TEXT DEFAULT 'pending'
+      );
+
+      INSERT INTO executions (actionType, triggeredBy, data, status) VALUES
+      ('EMAIL', 'system', '{"actionType":"EMAIL","triggeredBy":"system","status":"completed","details":{"message":"Test 1"}}', 'completed'),
+      ('SMS', 'user123', '{"actionType":"SMS","triggeredBy":"user123","status":"pending","details":{"message":"Test 2"}}', 'pending'),
+      ('EMAIL', 'system', '{"actionType":"EMAIL","triggeredBy":"system","status":"completed","details":{"message":"Test 3"}}', 'completed');
+    `)
+	})
+
+	afterEach(() => {
+		db.close()
+	})
+
+	test("composes filtered query with json columns", () => {
+		const baseSelect = db.sql`
+      SELECT ${{ columns: ["id", "actionType", "data<-json", "status"] }}
+      FROM executions
+    `
+		const whereClause = db.sql`WHERE status = ${"$status"}`
+		const query = db.sql`${baseSelect} ${whereClause}`
+
+		const results = query.all({ status: "completed" })
+		assert.equal(results.length, 2)
+		assert.equal(results[0].data.status, "completed")
+	})
+
+	test("composes query with filter and sort", () => {
+		const baseSelect = db.sql`
+      SELECT ${{ columns: ["id", "actionType", "data<-json"] }}
+      FROM executions
+    `
+		const whereClause = db.sql`WHERE actionType = ${"$type"}`
+		const orderClause = db.sql`ORDER BY ${raw`createdAt`} DESC`
+		const query = db.sql`${baseSelect} ${whereClause} ${orderClause}`
+
+		const results = query.all({ type: "EMAIL" })
+		assert.equal(results.length, 2)
+		assert.equal(results[0].actionType, "EMAIL")
+	})
+
+	test("composes query with pagination", () => {
+		const baseSelect = db.sql`
+      SELECT ${{ columns: ["id", "actionType"] }}
+      FROM executions
+    `
+		const limitClause = db.sql`${{ limit: 1, offset: 1 }}`
+		const query = db.sql`${baseSelect} ${limitClause}`
+
+		const results = query.all()
+		assert.equal(results.length, 1)
+	})
+
+	test("composes complex query with multiple conditions", () => {
+		const baseSelect = db.sql`
+      SELECT ${{ columns: ["id", "actionType", "data<-json"] }}
+      FROM executions
+    `
+		const whereClause = db.sql`
+      WHERE actionType = ${"$type"}
+      AND status = ${"$status"}
+    `
+		const orderAndLimit = db.sql`
+      ORDER BY ${raw`createdAt`} DESC
+      ${{ limit: 1 }}
+    `
+		const query = db.sql`${baseSelect} ${whereClause} ${orderAndLimit}`
+
+		const results = query.all({ type: "EMAIL", status: "completed" })
+		assert.equal(results.length, 1)
+		assert.equal(results[0].actionType, "EMAIL")
+		assert.equal(results[0].data.status, "completed")
+	})
+
+	test("composes mutation query", () => {
+		const updateStmt = db.sql`UPDATE executions`
+		const setClause = db.sql`
+      SET status = ${"$newStatus"},
+          data = ${"$data->json"}
+    `
+		const whereClause = db.sql`WHERE id = ${"$id"}`
+		const query = db.sql`${updateStmt} ${setClause} ${whereClause}`
+
+		const result = query.run({
+			id: 1,
+			newStatus: "failed",
+			data: {
+				actionType: "EMAIL",
+				triggeredBy: "system",
+				status: "failed",
+				details: { message: "Updated" },
+			},
+		})
+		assert.equal(result.changes, 1)
+	})
+})

@@ -91,6 +91,9 @@ export class DB {
 					this.#logger.debug("Created statement cache with default options")
 				}
 			}
+
+			this.#db.enableLoadExtension(options?.enableLoadExtension !== false)
+
 		} catch (error) {
 			this.#logger.error("Failed to initialize database", error)
 			throw new NodeSqliteError(
@@ -101,6 +104,15 @@ export class DB {
 				error instanceof Error ? error : undefined
 			)
 		}
+	}
+	/**
+	* Returns the underlying DatabaseSync instance
+	
+	
+	*/ 
+
+	get nativeDb(): DatabaseSync {
+		return this.#db
 	}
 	/**
 	 * Prepares an SQL statement with optional caching.

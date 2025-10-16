@@ -62,7 +62,7 @@ export class DB {
 		this.#logger.debug("Initializing database", { location })
 
 		try {
-			this.#db = new DatabaseSync(location, { open: true })
+			this.#db = new DatabaseSync(location, { open: true, allowExtension: options?.allowExtension ?? false })
 			this.#logger.info("Database opened successfully", { location })
 
 			// Configure pragmas based on environment and custom settings
@@ -91,8 +91,6 @@ export class DB {
 					this.#logger.debug("Created statement cache with default options")
 				}
 			}
-
-			this.#db.enableLoadExtension(options?.enableLoadExtension !== false)
 
 		} catch (error) {
 			this.#logger.error("Failed to initialize database", error)

@@ -30,7 +30,7 @@ export interface DBOptions {
 	/** Database file path or ":memory:" for in-memory database */
 	location?: string | ":memory:"
 
-	enableLoadExtension?: false
+	allowExtension?: boolean
 
 	/** Statement cache configuration - boolean to use defaults or detailed options */
 	statementCache?: boolean | StatementCacheOptions

@@ -3,10 +3,14 @@ import { validationErr, type ValidationError } from "#validate.js"
 
 // biome-ignore lint/suspicious/noExplicitAny: <explanation>
 type DataRow = { [key: string]: any }
+
 export type DeferrableStatus =
 	| "NOT DEFERRABLE"
+	| "NOT DEFERRABLE INITIALLY DEFERRED"
+	| "NOT DEFERRABLE INITIALLY IMMEDIATE"
 	| "DEFERRABLE INITIALLY IMMEDIATE"
 	| "DEFERRABLE INITIALLY DEFERRED"
+	| "DEFERRABLE"
 
 export type KeyList<T extends DataRow> =
 	| keyof T
